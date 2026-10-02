@@ -1,0 +1,6 @@
+python setup.py                        # download models + init collection
+python verify_models.py                # test all models
+python curate_seed_corpus.py           # curate corpus into Chroma
+python compile_benchmark_dataset.py    # build benchmark cases
+python evaluate.py --models all --iterations 3 --cases-per-iteration 50 --seed 42
+pytest                                 # run tests

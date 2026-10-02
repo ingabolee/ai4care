@@ -1,0 +1,265 @@
+{
+  "iteration_id": "0001",
+  "seed": 1892932127,
+  "dataset_version": "v1",
+  "benchmark_version": "v1",
+  "sampling_mode": "proportional",
+  "n_cases": 50,
+  "cases": [
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "c2c5e8ea",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "8405273b",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "01c5f7c5",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "101b6279",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "f51cabe7",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "ffa73cf9",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "fca198eb",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "6cf5747c",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "6757dbd3",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "d98aed10",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "4fcfea5e",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "d2d8ce67",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "b3b9ce63",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "4365e03e",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "de55b9ea",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "2fd8c0cb",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "d7b6e5bd",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "524dbd56",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "054197f0",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "922d0167",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "26339445",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "543848fa",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "ac959006",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "260360de",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "7adec3ba",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "30bc9edd",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "5ae9fc7b",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "effd4176",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "0f01cbb8",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "ba1350d7",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "93f7bc66",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "c4199642",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "d188276c",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "dee57bb5",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "d054700f",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "65673e77",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "ed90c184",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "0d3c6ec3",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "a6fd5c1e",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "3c2444d7",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "2421e2b4",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "a630f615",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "65502695",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "question_variant_id": "5696f5ac",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "0a7143b7",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "037d9fc5",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "25ba22c5",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "20c3f34c",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "question_variant_id": "d42456d1",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "question_variant_id": "88cccd15",
+      "category": "legal"
+    }
+  ],
+  "category_distribution": {
+    "healthcare": 17,
+    "retail": 16,
+    "legal": 17
+  }
+}

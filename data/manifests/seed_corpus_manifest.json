@@ -1,0 +1,18 @@
+{
+  "source_dataset": "ozguragrali/enterprise-knowledge-qa-dataset-gemini-flash-for-t5-large",
+  "source_version": "train",
+  "raw_record_count": 857,
+  "curated_case_count": 3,
+  "curated_chunk_count": 174,
+  "category_distribution": {
+    "legal": 133,
+    "healthcare": 27,
+    "retail": 14
+  },
+  "chunk_size": 600,
+  "chunk_overlap": 75,
+  "chroma_collection": "ai4care_knowledge",
+  "embedding_function": "chromadb_default",
+  "corpus_version": "v1",
+  "timestamp": "2026-10-02T12:06:30Z"
+}

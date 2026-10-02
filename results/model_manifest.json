@@ -1,0 +1,50 @@
+[
+  {
+    "model_id": "general_small",
+    "model_path": "C:\\Users\\LIH INGABO\\Desktop\\thesis\\ai4care-master\\ai4care-master\\.models\\general_small.gguf",
+    "model_size_mb": 637.81,
+    "n_ctx": 2048,
+    "description": "TinyLlama 1.1B Chat (general, compact)",
+    "enabled": true,
+    "load_success": true,
+    "generation_success": true,
+    "detected_chat_template": "{% for message in messages %}\n{% if message['role'] == 'user' %}\n{{ '<|user|>\n' \u2026",
+    "error_message": null
+  },
+  {
+    "model_id": "general_main",
+    "model_path": "C:\\Users\\LIH INGABO\\Desktop\\thesis\\ai4care-master\\ai4care-master\\.models\\general_main.gguf",
+    "model_size_mb": 1065.56,
+    "n_ctx": 4096,
+    "description": "Qwen2.5 1.5B Instruct (general, mid-size)",
+    "enabled": true,
+    "load_success": true,
+    "generation_success": true,
+    "detected_chat_template": "{%- if tools %}\n    {{- '<|im_start|>system\\n' }}\n    {%- if messages[0]['role']\u2026",
+    "error_message": null
+  },
+  {
+    "model_id": "coder_small",
+    "model_path": "C:\\Users\\LIH INGABO\\Desktop\\thesis\\ai4care-master\\ai4care-master\\.models\\coder_small.gguf",
+    "model_size_mb": 468.64,
+    "n_ctx": 4096,
+    "description": "Qwen2.5-Coder 0.5B Instruct (code-specialised, compact)",
+    "enabled": true,
+    "load_success": true,
+    "generation_success": true,
+    "detected_chat_template": "{%- if tools %}\n    {{- '<|im_start|>system\\n' }}\n    {%- if messages[0]['role']\u2026",
+    "error_message": null
+  },
+  {
+    "model_id": "coder_main",
+    "model_path": "C:\\Users\\LIH INGABO\\Desktop\\thesis\\ai4care-master\\ai4care-master\\.models\\coder_main.gguf",
+    "model_size_mb": 1065.56,
+    "n_ctx": 4096,
+    "description": "Qwen2.5-Coder 1.5B Instruct (code-specialised, mid-size)",
+    "enabled": true,
+    "load_success": true,
+    "generation_success": true,
+    "detected_chat_template": "{%- if tools %}\n    {{- '<|im_start|>system\\n' }}\n    {%- if messages[0]['role']\u2026",
+    "error_message": null
+  }
+]

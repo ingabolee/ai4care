@@ -1,0 +1,10 @@
+# AI4CARE — Python dependencies
+# Install in order:
+#
+# pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+# pip install -r requirements.txt
+
+chromadb>=0.5.0
+huggingface_hub>=0.23.0
+datasets>=2.19.0
+pytest>=8.0.0

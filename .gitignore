@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Downloaded GGUF models — large binary files, download via setup.py
+.models/
+
+# ChromaDB persistent store — generated at runtime by setup.py
+.chroma_db/
+
+# Logs
+*.log
+llama-build.log
+
+# Environment variables
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
