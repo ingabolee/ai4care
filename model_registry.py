@@ -21,6 +21,8 @@ from typing import Optional
 BASE_DIR = Path(__file__).parent.resolve()
 MODELS_DIR = BASE_DIR / ".models"
 CHROMA_DIR = BASE_DIR / ".chroma_db"
+DATA_DIR = BASE_DIR / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # ─── SINGLE CHROMA COLLECTION ────────────────────────────────────────────────
 # ALL models query the same collection. The embedding function is Chroma's
@@ -73,6 +75,35 @@ MODEL_CONFIGS: dict[str, dict] = {
     #     "description": "Microsoft Phi-3 Mini 4K Instruct",
     # },
 }
+
+# The verbalized respondent arm needs a controlled constant
+# We define respondent_main to map to Qwen2.5-7B-Instruct
+MODEL_CONFIGS["respondent_main"] = {
+    "repo": "Qwen/Qwen2.5-7B-Instruct-GGUF",
+    "file": "qwen2.5-7b-instruct-q4_k_m.gguf",
+    "local": "respondent_main.gguf",
+    "n_ctx": 4096,
+    "enabled": False,
+    "description": "Qwen2.5 7B Instruct (Verbalized Respondent)",
+}
+
+# ─── DYNAMIC GENERATED REGISTRY ──────────────────────────────────────────────
+from estimator import LLMCapacityEngine
+
+def _slugify(name: str) -> str:
+    return name.lower().replace(" ", "-")
+
+GENERATED_REGISTRY = {}
+for m in LLMCapacityEngine.MODEL_CATALOG:
+    name_slug = _slugify(m["name"])
+    repo_gguf = m["repo"] + "-GGUF"
+    if "/" not in repo_gguf:
+        repo_gguf = m["repo"]  # fallback just in case
+    GENERATED_REGISTRY[name_slug] = {
+        "repo": repo_gguf,
+        "n_ctx": min(m["max_context"], 32768)
+    }
+
 
 
 @dataclass
@@ -131,7 +162,73 @@ def get_model_spec(model_id: str) -> ModelSpec:
     )
 
 
-def get_runner(model_id: str, verbose: bool = False):
+def _resolve_and_download_dynamic(model_id: str, quant: str = "Q4_K_M") -> ModelSpec:
+    """Dynamically resolve and download a model from GENERATED_REGISTRY."""
+    import json
+    from huggingface_hub import list_repo_files, hf_hub_download
+    import os
+
+    if model_id not in GENERATED_REGISTRY:
+        raise KeyError(f"Dynamic model '{model_id}' not found in GENERATED_REGISTRY")
+    
+    reg = GENERATED_REGISTRY[model_id]
+    repo = reg["repo"]
+    
+    # Try looking in cache
+    cache_file = DATA_DIR / f"repo_files_cache_{repo.replace('/', '_')}.json"
+    files = []
+    if cache_file.exists():
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                files = json.load(f)
+        except Exception:
+            pass
+            
+    if not files:
+        files = list_repo_files(repo)
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(files, f)
+            
+    # Find the right file
+    target_quant = quant.lower()
+    chosen_file = None
+    for f in files:
+        f_lower = f.lower()
+        if f_lower.endswith(".gguf") and target_quant in f_lower:
+            chosen_file = f
+            break
+            
+    if not chosen_file:
+        raise RuntimeError(f"Could not find a .gguf matching {quant} in {repo}. Available: {files[:5]}...")
+
+    local_path = MODELS_DIR / f"{model_id}_{quant}.gguf"
+    
+    if not local_path.exists() or local_path.stat().st_size <= 10_000:
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        dl_path = hf_hub_download(repo_id=repo, filename=chosen_file)
+        # symlink or copy to our .models directory
+        if os.name == 'nt':
+            import shutil
+            shutil.copy2(dl_path, local_path)
+        else:
+            try:
+                os.symlink(dl_path, local_path)
+            except FileExistsError:
+                pass
+                
+    size_mb = local_path.stat().st_size / (1024 * 1024)
+    return ModelSpec(
+        model_id=f"{model_id}_{quant}",
+        local_path=local_path,
+        n_ctx=reg["n_ctx"],
+        description=f"Dynamic {model_id} ({quant})",
+        repo=repo,
+        file=chosen_file,
+        enabled=True,
+        model_size_mb=round(size_mb, 2)
+    )
+
+def get_runner(model_id: str, verbose: bool = False, quant: str = "Q4_K_M"):
     """Load and return a ChatRunner instance for the given model ID.
     Supports environment-based backend overrides (AI4CARE_BACKEND=openai).
     Raises RuntimeError explicitly if the model file is missing or backend fails.
@@ -147,13 +244,17 @@ def get_runner(model_id: str, verbose: bool = False):
             base_url=os.environ.get("OPENAI_API_BASE", "http://localhost:8000/v1")
         )
 
-    # Default: local GGUF
-    spec = get_model_spec(model_id)
-    if not spec.local_path.exists() or spec.local_path.stat().st_size <= 10_000:
-        raise RuntimeError(
-            f"[{model_id}] Model file not found or too small: {spec.local_path}\\n"
-            "Run 'python setup.py' to download models."
-        )
+    # Resolve spec from either static mapping or dynamic registry
+    if model_id in MODEL_CONFIGS:
+        spec = get_model_spec(model_id)
+        if not spec.local_path.exists() or spec.local_path.stat().st_size <= 10_000:
+            raise RuntimeError(
+                f"[{model_id}] Model file not found or too small: {spec.local_path}\n"
+                "Run 'python setup.py' to download models."
+            )
+    else:
+        # Try dynamic resolution
+        spec = _resolve_and_download_dynamic(model_id, quant)
     
     from inference import LlamaCppRunner
     n_threads = max(1, (os.cpu_count() or 4) - 1)
