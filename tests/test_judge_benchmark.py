@@ -50,16 +50,13 @@ def test_judge_benchmark_produces_outputs(
     mock_judge_instance = mock_llm_judge_cls.return_value
     mock_judge_instance.evaluate_interview.return_value = {
         "success": True,
-        "parse_retries": 1,
+        "score": 3,
+        "metric_version": "v2",
+        "supporting_evidence": "Q2 was well-targeted.",
+        "failure_type": None,
+        "failure_reason": None,
         "latency_ms": 100,
-        "metrics": {
-            "turn_level_completeness_efficiency": 8.0, 
-            "turn_level_contradiction_rate": 2.0, 
-            "overall_elicit_efficiency": 7.5, 
-            "participant_engagement": 6.0, 
-            "redundancy_penalty": 1.0, 
-            "hallucination_penalty": 0.0
-        }
+        "judge_id": "mock",
     }
     
     # Configure arguments for run
@@ -83,18 +80,18 @@ def test_judge_benchmark_produces_outputs(
     assert summary_json.exists()
     assert partial_jsonl.exists()
     
-    # Check rows: 3 traces x 2 judges x 6 metrics = 36 rows
+    # Check rows: 3 traces x 2 judges x 1 metric = 6 rows
     import csv
     with open(long_csv, "r") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
-        assert len(rows) == 36
+        assert len(rows) == 6
         
-    # Aggr rows: 3 traces x 6 metrics = 18 rows
+    # Aggr rows: 3 traces x 1 metric = 3 rows
     with open(aggr_csv, "r") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
-        assert len(rows) == 18
+        assert len(rows) == 3
         
     # Verify summary JSON schema
     with open(summary_json, "r") as f:

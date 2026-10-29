@@ -73,54 +73,58 @@ def _make_session(episode_id="test_ep", model_id="general_small") -> InterviewSe
     )
 
 
-# ─── Local helpers for functions moved out of evaluate.py ────────────────────
-import re as _re
+# ─── Production metrics imported from evaluation_metrics.py ─────────────────
+from evaluation_metrics import (
+    compute_reference_claim_metrics,
+    compute_schema_completeness,
+    compute_all_metrics,
+    EVALUATION_SCHEMA_VERSION,
+)
+
 
 def match_fact(extracted_value: str, reference_facts: list, threshold: float = 0.25) -> bool:
-    e_words = set(_re.sub(r"[^a-z0-9 ]", "", extracted_value.lower()).split())
+    """Lightweight wrapper used in this test file only.
+    For production use, use evaluation_metrics.compute_reference_claim_metrics.
+    """
+    from evaluation_metrics import _normalise, _overlap_coefficient
+    e_words = _normalise(extracted_value)
     for ref in reference_facts:
-        r_words = set(_re.sub(r"[^a-z0-9 ]", "", ref["text"].lower()).split())
-        if not e_words or not r_words:
-            continue
-        overlap = len(e_words & r_words) / max(len(e_words), len(r_words))
-        if overlap >= threshold:
+        r_words = _normalise(ref["text"])
+        if _overlap_coefficient(e_words, r_words) >= threshold:
             return True
     return False
 
 
 def compute_metrics(session, reference_facts: list) -> dict:
+    """Compatibility wrapper — delegates to production evaluation_metrics module."""
+    from evaluation_metrics import (
+        compute_redundancy_rate, compute_gap_targeting_rate,
+        compute_conflicting_field_rate, compute_evidence_presence_rate,
+        compute_novel_fields,
+    )
     ks = session.knowledge_state
-    completeness = schema_completeness(ks)
-    recovered_facts = [
-        {"field": f, "value": s["value"]}
-        for f, s in ks.items() if s["value"] and s["status"] != "unknown"
-    ]
-    total_ref = len(reference_facts)
-    total_rec = len(recovered_facts)
-    matched_ref = sum(1 for rf in reference_facts if any(match_fact(rf["text"], [{"text": r["value"]}]) for r in recovered_facts))
-    recall = matched_ref / total_ref if total_ref > 0 else 0.0
-    matched_rec = sum(1 for rcf in recovered_facts if match_fact(rcf["value"], reference_facts))
-    precision = matched_rec / total_rec if total_rec > 0 else 0.0
-    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
-    unsupported = sum(1 for rcf in recovered_facts if not match_fact(rcf["value"], reference_facts))
-    unsupported_rate = unsupported / total_rec if total_rec > 0 else 0.0
-    evidence_supported = sum(1 for f, s in ks.items() if s.get("evidence") and s.get("value"))
-    evidence_support_rate = evidence_supported / max(total_rec, 1)
-    conflicting = sum(1 for s in ks.values() if s["status"] == "conflicting")
-    non_unknown = sum(1 for s in ks.values() if s["status"] != "unknown")
-    contradiction_rate = conflicting / non_unknown if non_unknown > 0 else 0.0
-    interviewer_turns = [t for t in session.turns if t.get("role") == "interviewer" and t.get("target_field")]
-    valid_gap = sum(1 for t in interviewer_turns if ks.get(t.get("target_field", ""), {}).get("status") in ("unknown", "candidate", "conflicting"))
-    gap_targeting_rate = valid_gap / len(interviewer_turns) if interviewer_turns else 0.0
-    all_q = [t for t in session.turns if t.get("role") == "interviewer" and t.get("turn_id", 0) > 0]
-    redundant_q = sum(1 for t in all_q if t.get("redundant", False))
-    redundancy_rate = redundant_q / len(all_q) if all_q else 0.0
+    turns = session.turns
+    atoms = getattr(session, "atomic_facts", [])
+
+    completeness = compute_schema_completeness(ks)
+    case_id = getattr(session, "case_id", "_test_")
+    ref_m = compute_reference_claim_metrics(atoms, reference_facts, case_id, threshold=0.25)
+    novelty = compute_novel_fields(turns)
+    redundancy = compute_redundancy_rate(turns)
+    gap = compute_gap_targeting_rate(turns, ablation="none")
+    conflict = compute_conflicting_field_rate(ks)
+    evidence = compute_evidence_presence_rate(ks)
+
     return {
-        "schema_completeness": completeness, "reference_fact_recall": recall,
-        "reference_fact_precision": precision, "reference_fact_f1": f1,
-        "unsupported_fact_rate": unsupported_rate, "evidence_support_rate": evidence_support_rate,
-        "contradiction_rate": contradiction_rate, "gap_targeting_rate": gap_targeting_rate,
-        "redundancy_rate": redundancy_rate,
+        "schema_completeness": completeness,
+        "reference_fact_recall": ref_m["reference_fact_recall"],
+        "reference_fact_precision": ref_m["reference_fact_precision"],
+        "reference_fact_f1": ref_m["reference_fact_f1"],
+        "unsupported_fact_rate": 1.0 - (ref_m["reference_fact_precision"] or 0.0),
+        "evidence_support_rate": evidence["evidence_presence_rate"],
+        "contradiction_rate": conflict["conflicting_field_rate"],
+        "gap_targeting_rate": gap["gap_targeting_rate"],
+        "redundancy_rate": redundancy["question_redundancy_rate"],
     }
 
 
@@ -350,8 +354,8 @@ class TestIterationRandomization:
             original = evaluate.ITERATIONS_DIR
             evaluate.ITERATIONS_DIR = Path(tmpdir)
 
-            m1 = create_iteration_manifest("0001", cases, 10, seed=999, config=config)
-            m2 = create_iteration_manifest("0001", cases, 10, seed=999, config=config)
+            m1 = create_iteration_manifest("0001", cases, 10, seed=999, config=config, benchmark_hash="test_bh")
+            m2 = create_iteration_manifest("0001", cases, 10, seed=999, config=config, benchmark_hash="test_bh")
 
             evaluate.ITERATIONS_DIR = original
 
@@ -367,8 +371,8 @@ class TestIterationRandomization:
             original = evaluate.ITERATIONS_DIR
             evaluate.ITERATIONS_DIR = Path(tmpdir)
 
-            m1 = create_iteration_manifest("0001", cases, 15, seed=111, config=config)
-            m2 = create_iteration_manifest("0002", cases, 15, seed=999, config=config)
+            m1 = create_iteration_manifest("0001", cases, 15, seed=111, config=config, benchmark_hash="test_bh")
+            m2 = create_iteration_manifest("0002", cases, 15, seed=999, config=config, benchmark_hash="test_bh")
 
             evaluate.ITERATIONS_DIR = original
 
@@ -393,7 +397,7 @@ class TestSameCasesAcrossModels:
             original = evaluate.ITERATIONS_DIR
             evaluate.ITERATIONS_DIR = Path(tmpdir)
 
-            manifest = create_iteration_manifest("0001", cases, 10, seed=42, config=config)
+            manifest = create_iteration_manifest("0001", cases, 10, seed=42, config=config, benchmark_hash="test_bh")
 
             evaluate.ITERATIONS_DIR = original
 

@@ -1,78 +1,179 @@
-# AI4CARE Evaluation Metrics
+# Evaluation Metrics Reference
 
-This document describes all metrics computed by the AI4CARE evaluation framework.
+**Metric schema version**: v2  
+**Matching algorithm**: `lexical_bipartite_v1`  
+**Default matching threshold**: `0.5`
 
----
-
-## Reference-Based Metrics (Objective)
-
-These are computed by comparing the session's extracted knowledge against the benchmark reference facts.
-
-| Metric | Description | Range |
-|--------|-------------|-------|
-| `schema_completeness` | Fraction of schema fields at `supported` or higher, weighted by status level | 0–1 |
-| `reference_fact_recall` | Fraction of gold reference facts matched by extracted values | 0–1 |
-| `reference_fact_precision` | Fraction of extracted values that match a gold reference fact | 0–1 |
-| `reference_fact_f1` | Harmonic mean of recall and precision | 0–1 |
-| `unsupported_fact_rate` | Fraction of extracted values that do NOT match any reference fact (potential hallucination) | 0–1 |
-| `evidence_support_rate` | Fraction of extracted facts backed by direct transcript evidence | 0–1 |
-| `contradiction_rate` | Fraction of non-unknown fields in a `conflicting` state | 0–1 |
-| `gap_targeting_rate` | Fraction of interviewer questions that targeted an unresolved gap | 0–1 |
-| `redundancy_rate` | Fraction of interviewer questions flagged as redundant (cosine similarity > 0.85 to prior Q) | 0–1 |
+> **Important limitations**: All metrics are simulation-based and reference-based. Lexical matching is a proxy, not verified factual accuracy. Panel agreement does not establish human-preference alignment or real-world correctness. No human evaluation is performed.
 
 ---
 
-## Turn-Level Novelty / Tacit Knowledge Metrics
+## Primary Outcome
 
-These are tracked per participant turn in the trace.
+### `reference_fact_f1`
 
-| Field | Description |
-|-------|-------------|
-| `newly_surfaced_fields` | List of schema fields that transitioned out of `unknown` in this turn |
-| `novel_facts_count` | Integer count of newly surfaced fields per turn |
-| `completeness_after` | Schema completeness immediately after this turn's extraction |
+**Type**: float [0, 1] or `null`  
+**Formula**: `2 × P × R / (P + R)`, zero if `P + R = 0`  
+**Null when**: Reference facts are unavailable for the case.
 
-These enable **turn-efficiency curves**: plotting `novel_facts_count` per turn shows when knowledge elicitation becomes saturated.
+The primary outcome metric. Balances precision and recall of extracted claims against the reference fact set. Use this for model comparisons.
 
 ---
 
-## Judge-Based Metrics (Subjective, MoE)
+## Reference-Claim Metrics
 
-These are produced by the `LLMJudge` panel in PHASE 2 of the evaluation. Each metric is the **median** of scores across all judges. Disagreement is reported as `<metric>_stdev`.
+These metrics quantify how well the model extracted information that can be lexically matched to known reference facts.
 
-| Metric | Description | Rubric (0=worst, 10=best) |
-|--------|-------------|---------------------------|
-| `turn_level_completeness_efficiency` | How efficiently each question elicited new information | 10 = every question produces new knowledge |
-| `turn_level_contradiction_rate` | How often the interviewer probed apparent contradictions | 10 = contradictions always addressed |
-| `overall_elicit_efficiency` | Overall ratio of information gained vs. turns spent | 10 = maximum knowledge in minimum turns |
-| `participant_engagement` | How natural and engaging the conversation felt | 10 = highly engaging, natural flow |
-| `redundancy_penalty` | Penalty for repeating already-answered topics | 0 = no redundancy (best), 10 = extreme redundancy (worst) |
-| `hallucination_penalty` | Penalty for interviewer questions based on fabricated context | 0 = no hallucination (best), 10 = extreme (worst) |
+### Matching algorithm
 
-> **Note**: `redundancy_penalty` and `hallucination_penalty` are inverted — lower scores are better. The framework uses raw values; normalise if needed for composite scoring.
+Each extracted claim is compared to each reference fact using the **overlap coefficient**:
+
+```
+overlap(A, B) = |tokens(A) ∩ tokens(B)| / max(|tokens(A)|, |tokens(B)|)
+```
+
+A bipartite one-to-one matching is then computed (greedy, deterministic, score-descending). Each extracted claim and each reference fact can participate in at most one match.
+
+Tokens are lowercased, punctuation stripped, and unique (set-based).
+
+### `reference_fact_precision`
+
+**Formula**: `matched_pairs / extracted_claim_count`  
+**Null when**: No extracted claims (no precision denominator).
+
+Fraction of extracted claim units that matched at least one reference fact.
+
+### `reference_fact_recall`
+
+**Formula**: `matched_pairs / reference_fact_count`  
+**Null when**: Reference facts unavailable.  
+**Zero when**: No extracted claims.
+
+Fraction of reference facts covered by at least one extracted claim.
+
+### `extracted_claim_count`
+
+Number of unique extracted claim units sent into matching. Multi-sentence field values are split into individual claims; duplicates by (field, value) are removed before splitting.
+
+### `reference_fact_count`
+
+Number of reference facts for this specific `case_id`.
+
+### `matched_pair_count`
+
+Number of one-to-one matched pairs at the default threshold.
+
+### Sensitivity analysis
+
+`sensitivity_sweep()` runs matching at thresholds `{0.25, 0.5, 0.75}` and returns all three results. Use only to characterise measurement stability — do NOT use to select the tuned threshold.
 
 ---
 
-## Latency Metrics
+## Schema Completeness
 
-These are recorded directly from the generation timestamps.
+### `schema_completeness`
 
-| Metric | Description |
-|--------|-------------|
-| `generation_latency_ms` | Time to generate an interviewer question |
-| `extraction_latency_ms` | Time to run structured extraction on a participant answer |
-| `retrieval_latency_ms` | Time for ChromaDB similarity search |
-| `total_runtime_ms` | Total wall-clock time for one complete episode |
+**Type**: float [0, 1]  
+**Formula**: `sum(status_weights) / (9 × 3)`
+
+Status weights:
+| Status | Weight |
+|---|---|
+| `unknown` | 0 |
+| `candidate` | 1 |
+| `conflicting` | 1 |
+| `supported` | 2 |
+| `verified` | 3 |
+
+Reflects progress through the state machine. Does NOT measure ground-truth correctness.
 
 ---
 
-## Experiment-Level Identifiers
+## Information Yield
 
-| Field | Description |
-|-------|-------------|
-| `run_id` | Unique `{iteration_id}_{model_id}_{case_id[:8]}` string |
-| `iteration_id` | Iteration number (zero-padded 4-digit string) |
-| `model_id` | Candidate model being evaluated |
-| `case_id` | Benchmark case identifier |
-| `ablation` | Active ablation (`none`, `no_rag`, `state_machine`) |
-| `successful_judges` | Number of judges that returned parseable scores |
+### `novel_fields_total`
+
+Total count of schema fields that were first surfaced (status transitioned out of `unknown`) during participant turns. Summed across all participant turns.
+
+### `novel_fields_per_response`
+
+`novel_fields_total / n_participant_turns`. Zero if no participant turns.
+
+---
+
+## Process Diagnostics
+
+### `question_redundancy_rate`
+
+**Formula**: `redundant_follow_up_questions / eligible_follow_up_questions`  
+**Null when**: No follow-up questions (turn_id > 0).
+
+Uses the `redundant` flag set by `engine._is_redundant()` (lexical overlap ≥ 0.85 against prior questions). Detects lexical redundancy only, not semantic.
+
+### `gap_targeting_rate`
+
+**Formula**: `aligned_follow_up_questions / eligible_follow_up_questions`  
+**Null when**: No follow-up questions, OR `ablation = "state_machine"`.
+
+A follow-up question is time-consistently aligned if:
+1. Its `target_field` matches `knowledge_gap_targeted`.
+2. The field's status in `knowledge_state_before_question` was `unknown`, `candidate`, or `conflicting`.
+
+Uses the `knowledge_state_before_question` snapshot stored **before** each question is generated.
+
+### `conflicting_field_rate`
+
+**Formula**: `conflicting_fields / non_unknown_fields`  
+**Null when**: All fields are `unknown`.
+
+Fraction of active fields in the `conflicting` state. Conflict detection is lexical (not logical contradiction).
+
+### `evidence_presence_rate`
+
+**Formula**: `populated_fields_with_evidence / populated_fields`  
+**Null when**: No populated fields.
+
+Fraction of extracted fields that have non-empty `evidence` metadata. Evidence presence ≠ evidence validity.
+
+---
+
+## LLM-as-a-Judge Score
+
+### `follow_up_question_quality`
+
+**Type**: Integer `{0, 1, 2, 3, 4}` (panel median), or `null`  
+**Metric schema version**: v2  
+**Null when**: No valid judge scores available.
+
+Single rubric-based metric assessing observable transcript-level question quality:
+
+| Score | Meaning |
+|---|---|
+| 0 | Unacceptable: most follow-ups irrelevant or incoherent |
+| 1 | Poor: generic, poorly connected to prior responses |
+| 2 | Mixed: inconsistent targeting or specificity |
+| 3 | Good: relevant, specific, appropriate progression |
+| 4 | Excellent: consistent, non-leading, advancing inquiry |
+
+Judges evaluate the sanitized transcript only. Candidate model identity, timing metadata, and extraction data are stripped before evaluation.
+
+### `judge_disagreement_mad`
+
+Median absolute deviation of valid judge scores. `null` if fewer than 2 valid scores.  
+`0.0` MAD means all valid judges agreed exactly. `null` MAD means disagreement is **not estimable**.
+
+---
+
+## Statistical Analysis
+
+### Resampling strategy
+
+Bootstrap CIs use **cluster-aware resampling** at the `case_group_id` level. Multiple question variants and iterations of the same source case are kept together. Do not pool resampling across `case_group_id` boundaries.
+
+Bootstrap seed: `42` (fixed, recorded in output).
+
+### Paired comparisons
+
+For each pair of models sharing identical `(case_group_id, question_variant_id)` keys, pairwise differences in `reference_fact_f1` are computed. Bootstrap CIs on differences use the same cluster-aware approach.
+
+> CIs reflect statistical uncertainty due to sampling. Stability of a CI does **not** establish construct validity or causal interpretations.

@@ -16,7 +16,8 @@ from pathlib import Path
 
 from estimator import HardwareDetector
 from judge_selector import select_judges
-from llm_judge import LLMJudge, METRICS as JUDGE_METRICS
+from llm_judge import LLMJudge, METRIC as JUDGE_METRIC, JUDGE_SCHEMA_VERSION
+from panel_aggregator import aggregate_judge_results
 from model_registry import get_runner
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -129,92 +130,92 @@ def main():
     print("\n[REPORTING] Writing CSV artifacts...")
     long_csv_path = out_dir / "judge_scores_long.csv"
     aggr_csv_path = out_dir / "panel_aggregated.csv"
-    
-    # Higher or lower better meta
-    def dir_for_metric(m: str) -> str:
-        if m in ("redundancy_penalty", "hallucination_penalty"):
-            return "lower_better"
-        return "higher_better"
 
-    # Write long CSV
+    LONG_COLS = [
+        "run_id", "iteration_id", "candidate_model_id", "case_id",
+        "case_group_id", "question_variant_id", "case_category",
+        "judge_id", "judge_family", "judge_params_b", "judge_quant",
+        "metric", "metric_version", "score",
+        "parse_status", "failure_type", "failure_reason",
+        "latency_ms", "judge_schema_version",
+    ]
+    AGGR_COLS = [
+        "run_id", "candidate_model_id", "case_id", "case_group_id",
+        "question_variant_id", "case_category",
+        "metric", "panel_median", "disagreement_mad",
+        "successful_judges", "total_judges", "panel_status",
+        "judge_schema_version",
+    ]
+
     with open(long_csv_path, "w", newline="", encoding="utf-8") as lf, \
          open(aggr_csv_path, "w", newline="", encoding="utf-8") as af:
-         
-        long_writer = csv.DictWriter(lf, fieldnames=[
-            "run_id", "iteration_id", "candidate_model_id", "case_id", "case_category",
-            "judge_id", "judge_family", "judge_params_b", "judge_quant", 
-            "metric", "score", "parse_retries", "parse_failed", "latency_ms", "truncated_transcript", "direction"
-        ])
+
+        long_writer = csv.DictWriter(lf, fieldnames=LONG_COLS, extrasaction="ignore")
         long_writer.writeheader()
-        
-        aggr_writer = csv.DictWriter(af, fieldnames=[
-            "run_id", "candidate_model_id", "metric", "panel_median", "panel_stdev", 
-            "n_judges", "successful_judges", "direction"
-        ])
+        aggr_writer = csv.DictWriter(af, fieldnames=AGGR_COLS, extrasaction="ignore")
         aggr_writer.writeheader()
 
         for run_id, v in results_by_trace.items():
             trace = v["trace"]
             judge_results = v["judge_results"]
             cand_id = trace.get("model_id", "")
-            
-            # Write long rows
+
+            # Write one long row per judge
             for jr in judge_results:
                 j_spec = jr["judge_spec"]
                 j_res = jr["result"]
-                metrics = j_res.get("metrics", {})
-                for m in JUDGE_METRICS:
-                    long_writer.writerow({
-                        "run_id": run_id,
-                        "iteration_id": trace.get("iteration_id"),
-                        "candidate_model_id": cand_id,
-                        "case_id": trace.get("case_id"),
-                        "case_category": trace.get("case_category", ""),
-                        "judge_id": j_spec["model_id"],
-                        "judge_family": j_spec.get("family"),
-                        "judge_params_b": j_spec.get("params_b"),
-                        "judge_quant": j_spec.get("quant"),
-                        "metric": m,
-                        "score": metrics.get(m, None),
-                        "parse_retries": j_res.get("parse_retries", 0),
-                        "parse_failed": int(not j_res.get("success", False)),
-                        "latency_ms": j_res.get("latency_ms", 0),
-                        "truncated_transcript": j_res.get("truncated_transcript", False),
-                        "direction": dir_for_metric(m)
-                    })
-                    
-            # Compute panel aggregated
-            for m in JUDGE_METRICS:
-                scores = []
-                for jr in judge_results:
-                    if jr["result"].get("success") and m in jr["result"].get("metrics", {}):
-                        scores.append(jr["result"]["metrics"][m])
-                        
-                median = statistics.median(scores) if scores else None
-                stdev = statistics.stdev(scores) if len(scores) > 1 else 0.0
-                aggr_writer.writerow({
+                parse_status = "success" if j_res.get("success") else j_res.get("failure_type", "unknown")
+                long_writer.writerow({
                     "run_id": run_id,
+                    "iteration_id": trace.get("iteration_id"),
                     "candidate_model_id": cand_id,
-                    "metric": m,
-                    "panel_median": median,
-                    "panel_stdev": stdev,
-                    "n_judges": len(judge_results),
-                    "successful_judges": len(scores),
-                    "direction": dir_for_metric(m)
+                    "case_id": trace.get("case_id"),
+                    "case_group_id": trace.get("case_group_id", ""),
+                    "question_variant_id": trace.get("question_variant_id", ""),
+                    "case_category": trace.get("case_category", ""),
+                    "judge_id": j_spec["model_id"],
+                    "judge_family": j_spec.get("family"),
+                    "judge_params_b": j_spec.get("params_b"),
+                    "judge_quant": j_spec.get("quant"),
+                    "metric": JUDGE_METRIC,
+                    "metric_version": j_res.get("metric_version", ""),
+                    "score": j_res.get("score"),
+                    "parse_status": parse_status,
+                    "failure_type": j_res.get("failure_type"),
+                    "failure_reason": j_res.get("failure_reason"),
+                    "latency_ms": j_res.get("latency_ms", 0),
+                    "judge_schema_version": JUDGE_SCHEMA_VERSION,
                 })
+
+            # Panel aggregation using shared function
+            raw_results = [jr["result"] for jr in judge_results]
+            agg = aggregate_judge_results(raw_results)
+            aggr_writer.writerow({
+                "run_id": run_id,
+                "candidate_model_id": cand_id,
+                "case_id": trace.get("case_id"),
+                "case_group_id": trace.get("case_group_id", ""),
+                "question_variant_id": trace.get("question_variant_id", ""),
+                "case_category": trace.get("case_category", ""),
+                "metric": JUDGE_METRIC,
+                "panel_median": agg["panel_median"],
+                "disagreement_mad": agg["disagreement_mad"],
+                "successful_judges": agg["successful_judges"],
+                "total_judges": agg["total_judges"],
+                "panel_status": agg["status"],
+                "judge_schema_version": JUDGE_SCHEMA_VERSION,
+            })
 
     print(f"Wrote {long_csv_path.name} and {aggr_csv_path.name}")
     
     # 6. JSON Summary and Console Report
     if not args.skip_summary:
         summary_path = out_dir / "judge_benchmark_summary.json"
-        # We need a robust per-judge metrics mean calculation
-        # and simple pairwise agreement approximation
-        judge_means = {j["model_id"]: {} for j in judges}
         parse_fails = {j["model_id"]: 0 for j in judges}
         latency_sums = {j["model_id"]: 0 for j in judges}
+        score_lists = {j["model_id"]: [] for j in judges}
         total_traces = len(traces)
-        
+
         for run_id, v in results_by_trace.items():
             for jr in v["judge_results"]:
                 jid = jr["judge_spec"]["model_id"]
@@ -222,21 +223,19 @@ def main():
                 latency_sums[jid] += jres.get("latency_ms", 0)
                 if not jres.get("success"):
                     parse_fails[jid] += 1
-                for m, val in jres.get("metrics", {}).items():
-                    judge_means[jid].setdefault(m, []).append(val)
-                    
+                elif jres.get("score") is not None:
+                    score_lists[jid].append(jres["score"])
+
         per_judge_summary = {}
         for j in judges:
             jid = j["model_id"]
-            metric_means = {}
-            for m, vals in judge_means[jid].items():
-                if vals:
-                    metric_means[m] = statistics.mean(vals)
-            
+            scores = score_lists[jid]
             per_judge_summary[jid] = {
                 "parse_failure_rate": parse_fails[jid] / total_traces if total_traces else 0,
                 "mean_latency_ms": latency_sums[jid] / total_traces if total_traces else 0,
-                "metrics_mean": metric_means
+                "metric": JUDGE_METRIC,
+                "mean_score": statistics.mean(scores) if scores else None,
+                "n_valid_scores": len(scores),
             }
 
         # Pairwise Spearman agreement (candidate orderings) simplification
