@@ -22,6 +22,7 @@ Strict validation:
 import json
 import math
 import time
+import ast
 from typing import Optional
 from copy import deepcopy
 
@@ -131,12 +132,16 @@ def _validate_score(parsed: dict) -> tuple[Optional[int], Optional[str], Optiona
       - failure_reason is a human-readable explanation or None
     """
     key = METRIC
+    if not isinstance(parsed, dict):
+        return None, FAILURE_INVALID, "Judge response must be a JSON object"
     if key not in parsed:
         return None, FAILURE_PARSE, f"Required key '{key}' missing from response"
 
     raw_val = parsed[key]
 
     # Must be numeric
+    if isinstance(raw_val, bool):
+        return None, FAILURE_INVALID, "Boolean values are not valid ordinal scores"
     try:
         float_val = float(raw_val)
     except (TypeError, ValueError):
@@ -199,24 +204,50 @@ class LLMJudge:
         failure_type = None
         failure_reason = None
         raw_response = ""
+        prompt_tokens = 0
+        completion_tokens = 0
 
         try:
-            resp = self.runner.generate(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_msg},
-                ],
-                max_tokens=256,
-                temperature=0.1,
-            )
-            raw_response = resp.get("text", "")
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ]
+            try:
+                resp = self.runner.generate(
+                    messages=messages,
+                    max_tokens=192,
+                    temperature=0.1,
+                    response_format={"type": "json_object"},
+                )
+            except TypeError:
+                # Keep compatibility with third-party ChatRunner adapters that
+                # implement the older signature without response_format.
+                resp = self.runner.generate(
+                    messages=messages,
+                    max_tokens=192,
+                    temperature=0.1,
+                )
+            raw_response = str(resp.get("text") or "")
+            prompt_tokens = resp.get("prompt_tokens", 0) or 0
+            completion_tokens = resp.get("completion_tokens", 0) or 0
 
             json_text = _scrub_json(raw_response)
             try:
                 parsed = json.loads(json_text)
             except (json.JSONDecodeError, ValueError) as exc:
-                failure_type = FAILURE_PARSE
-                failure_reason = f"JSON parse error: {exc}"
+                # Some local instruct models emit Python-style single quoted
+                # objects despite the JSON-only instruction. literal_eval is
+                # restricted to data literals and never executes model text.
+                try:
+                    parsed = ast.literal_eval(json_text)
+                except (ValueError, SyntaxError, MemoryError, RecursionError):
+                    failure_type = FAILURE_PARSE
+                    failure_reason = f"JSON parse error: {exc}"
+                else:
+                    score, failure_type, failure_reason = _validate_score(parsed)
+                    if score is not None:
+                        success = True
+                        supporting_evidence = str(parsed.get("supporting_evidence", ""))[:500]
             else:
                 score, failure_type, failure_reason = _validate_score(parsed)
                 if score is not None:
@@ -238,4 +269,6 @@ class LLMJudge:
             "failure_type": failure_type,
             "failure_reason": failure_reason,
             "latency_ms": latency_ms,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
         }

@@ -1,6 +1,6 @@
 """
-setup.py -- Download GGUF models from HuggingFace and initialise the single
-            ChromaDB collection used for all experiments.
+setup.py -- Initialise the shared ChromaDB collection and provide an
+            optional downloader for manually registered legacy models.
 
 Run once before starting interviews or evaluations:
     python setup.py
@@ -35,7 +35,11 @@ SEED_DOCS = [
 
 
 def download_models(model_ids: list | None = None):
-    """Download GGUF files for all enabled models (or a specific subset)."""
+    """Download static models for an optional manual demonstration.
+
+    The thesis evaluation uses estimator-selected models, which are resolved
+    and cached on demand by model_registry.get_runner().
+    """
     from huggingface_hub import hf_hub_download
     import shutil
 
@@ -89,13 +93,11 @@ def init_chroma():
 
 if __name__ == "__main__":
     print("=== AI4CARE Setup ===")
-    print("\n-- Downloading models --")
-    download_models()
     print("\n-- Initialising ChromaDB --")
     init_chroma()
     print("\nSetup complete.")
     print("Next steps:")
     print("  python curate_seed_corpus.py          # curate and ingest the knowledge corpus")
     print("  python compile_benchmark_dataset.py   # compile frozen benchmark Q/A pairs")
-    print("  python verify_models.py               # verify all models pass generation tests")
-    print("  python evaluate.py --models all --iterations 3 --cases 50")
+    print("  python evaluate.py --profile thesis --models all  # estimator selects/downloads models on demand")
+    print("For a legacy manually registered model demo, call download_models([...]) explicitly.")

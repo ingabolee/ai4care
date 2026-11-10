@@ -12,26 +12,56 @@ are responsible for the higher-level logic.
 """
 
 import uuid
+import threading
 from pathlib import Path
 from typing import Optional
 import chromadb
 
 from model_registry import CHROMA_DIR, CHROMA_COLLECTION
 
-
+# A PersistentClient is already designed to be reused. Constructing several
+# clients to the same SQLite-backed store adds locks and startup work without
+# giving reads a useful connection pool.
 _CLIENT: Optional[chromadb.PersistentClient] = None
+_COLLECTION = None
+_COLLECTION_COUNT: Optional[int] = None
+_CLIENT_LOCK = threading.Lock()
 
 def _get_client() -> chromadb.PersistentClient:
+    """Return the process-local persistent client, creating it once."""
     global _CLIENT
     if _CLIENT is None:
-        _CLIENT = chromadb.PersistentClient(path=str(CHROMA_DIR))
+        with _CLIENT_LOCK:
+            if _CLIENT is None:
+                _CLIENT = chromadb.PersistentClient(path=str(CHROMA_DIR))
     return _CLIENT
 
 
 def _get_collection(client: Optional[chromadb.PersistentClient] = None):
-    """Return the single shared Chroma collection."""
-    c = client or _get_client()
-    return c.get_or_create_collection(CHROMA_COLLECTION)
+    """Return the cached shared collection."""
+    global _COLLECTION
+    if client is not None and client is not _get_client():
+        return client.get_or_create_collection(CHROMA_COLLECTION)
+    if _COLLECTION is None:
+        with _CLIENT_LOCK:
+            if _COLLECTION is None:
+                _COLLECTION = _get_client().get_or_create_collection(CHROMA_COLLECTION)
+    return _COLLECTION
+
+
+def _get_collection_size(collection) -> int:
+    """Count once per stable collection state, rather than on every query."""
+    global _COLLECTION_COUNT
+    if _COLLECTION_COUNT is None:
+        with _CLIENT_LOCK:
+            if _COLLECTION_COUNT is None:
+                _COLLECTION_COUNT = collection.count()
+    return _COLLECTION_COUNT
+
+
+def _invalidate_collection_size() -> None:
+    global _COLLECTION_COUNT
+    _COLLECTION_COUNT = None
 
 
 # ─── QUERY ──────────────────────────────────────────────────────────────────
@@ -49,11 +79,12 @@ def query(text: str, n: int = 5, where: Optional[dict] = None) -> list[dict]:
     """
     client = _get_client()
     coll = _get_collection(client)
-    count = coll.count()
-    if count == 0:
+    count = _get_collection_size(coll)
+    if count <= 0:
         return []
-    limit = min(n, count)
-    kwargs = {"query_texts": [text], "n_results": limit}
+    # Chroma rejects n_results greater than the collection size. The cached
+    # count avoids repeated SQLite calls while preserving that guard.
+    kwargs = {"query_texts": [text], "n_results": min(n, count)}
     if where:
         kwargs["where"] = where
     results = coll.query(**kwargs)
@@ -115,6 +146,7 @@ def store_atomic_fact(
         documents=[f"{field}: {value}\nEvidence: {evidence}"],
         metadatas=[metadata],
     )
+    _invalidate_collection_size()
     return fact_id
 
 
@@ -142,6 +174,7 @@ def store_interview_artifact(
         **(extra_metadata or {}),
     }
     coll.upsert(ids=[artifact_id], documents=[summary_text], metadatas=[metadata])
+    _invalidate_collection_size()
     return artifact_id
 
 
@@ -163,6 +196,7 @@ def delete_episode_records(interview_id: str) -> int:
         ids_to_delete = existing.get("ids", [])
         if ids_to_delete:
             coll.delete(ids=ids_to_delete)
+            _invalidate_collection_size()
         return len(ids_to_delete)
     except Exception as exc:
         raise RuntimeError(f"Failed to delete episode records for {interview_id}: {exc}") from exc

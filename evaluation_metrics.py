@@ -4,8 +4,8 @@ evaluation_metrics.py -- Production evaluation metrics for AI4CARE.
 Implements all deterministic metrics used in the evaluation pipeline.
 This module is the single source of truth for metric definitions.
 
-Metric schema version: v2
-Matching algorithm:     lexical_bipartite_v1
+Metric schema version: v3
+Matching algorithm:     lexical_bipartite_exposed_v2
 Default threshold:      0.5  (shared unique token overlap coefficient)
 
 IMPORTANT LIMITATIONS:
@@ -24,8 +24,8 @@ from typing import Optional
 
 # ─── VERSION ─────────────────────────────────────────────────────────────────
 
-EVALUATION_SCHEMA_VERSION = "v2"
-MATCHING_ALGORITHM = "lexical_bipartite_v1"
+EVALUATION_SCHEMA_VERSION = "v3"
+MATCHING_ALGORITHM = "lexical_bipartite_exposed_v2"
 DEFAULT_MATCH_THRESHOLD = 0.5   # at least half of unique tokens in the longer set must be shared
 SENSITIVITY_THRESHOLDS = (0.25, 0.5, 0.75)
 
@@ -133,34 +133,18 @@ def compute_reference_claim_metrics(
     reference_facts: list[dict],
     case_id: str,
     threshold: float = DEFAULT_MATCH_THRESHOLD,
+    exposed_fact_indices: Optional[set[int]] = None,
 ) -> dict:
-    """Compute precision, recall, and F1 for reference-claim matching.
+    """Compare extracted claims with source sentences disclosed in this episode.
 
-    Inputs:
-        atomic_facts: list of dicts from trace["atomic_facts"], each having
-                      "case_id" (or derivable), "field", "value".
-        reference_facts: list of dicts from benchmark_facts.jsonl, each having
-                         "case_id" and "text".
-        case_id: the current benchmark case_id. Facts from other cases are
-                 silently excluded.
-        threshold: overlap coefficient threshold for a pair to qualify as a match.
-
-    Formula:
-        precision = matched / extracted_claim_count  (0.0 if no extracted claims)
-        recall    = matched / reference_fact_count   (0.0 if no reference facts)
-        f1        = 2*p*r / (p+r)                   (0.0 if denominator is 0)
-
-    Missing-value behaviour:
-        If reference_facts is None or an empty list, all three metrics are None
-        (unavailable). This must NOT be replaced with 0.0.
-
-    Returns a dict with keys:
-        reference_fact_precision, reference_fact_recall, reference_fact_f1,
-        extracted_claim_count, reference_fact_count, matched_pair_count,
-        matching_algorithm, matching_threshold, case_id, status
+    ``reference_facts`` is the full sentence inventory for the case. Production
+    calls pass the respondent's unique ``source_index`` values as
+    ``exposed_fact_indices``. This prevents unspoken source facts from counting
+    as extraction misses. ``None`` retains legacy all-reference behavior for
+    direct callers only.
     """
-    # Guard: no reference facts available → return None, not 0
-    if not reference_facts:
+    case_source_facts = [fact for fact in reference_facts if fact.get("case_id") == case_id]
+    if not case_source_facts:
         return {
             "reference_fact_precision": None,
             "reference_fact_recall": None,
@@ -168,98 +152,89 @@ def compute_reference_claim_metrics(
             "extracted_claim_count": None,
             "reference_fact_count": None,
             "matched_pair_count": None,
+            "source_reference_fact_count": None,
+            "exposed_reference_fact_count": None,
+            "reference_fact_exposure_rate": None,
             "matching_algorithm": MATCHING_ALGORITHM,
             "matching_threshold": threshold,
-            "case_id": case_id,
-            "status": "no_reference_facts",
-        }
-
-    # Isolate reference facts for this exact case_id
-    case_ref_facts = [f for f in reference_facts if f.get("case_id") == case_id]
-    if not case_ref_facts:
-        return {
-            "reference_fact_precision": None,
-            "reference_fact_recall": None,
-            "reference_fact_f1": None,
-            "extracted_claim_count": None,
-            "reference_fact_count": None,
-            "matched_pair_count": None,
-            "matching_algorithm": MATCHING_ALGORITHM,
-            "matching_threshold": threshold,
+            "reference_metrics_scope": "respondent_exposed_facts",
             "case_id": case_id,
             "status": "no_reference_facts_for_case",
         }
 
-    ref_texts = [f["text"] for f in case_ref_facts]
-    ref_count = len(ref_texts)
+    source_count = len(case_source_facts)
+    legacy_all_facts = exposed_fact_indices is None
+    case_ref_facts = case_source_facts if legacy_all_facts else [
+        fact for fact in case_source_facts
+        if int(fact.get("source_index", -1)) in exposed_fact_indices
+    ]
+    ref_count = len(case_ref_facts)
+    exposure_rate = ref_count / source_count if source_count else None
 
-    # Build extracted claim units from atomic_facts for this case
-    # Deduplicate by (field, normalised_value) pair before splitting
+    # Deduplicate claims by (field, value), then split multi-claim values.
     seen: set[tuple[str, str]] = set()
     raw_values: list[str] = []
-    for af in atomic_facts:
-        # Accept facts that have matching case context or no case field (legacy)
-        field = af.get("field", "")
-        value = str(af.get("value", "")).strip()
-        if not value:
-            continue
-        key = (field, value.lower())
-        if key not in seen:
-            seen.add(key)
+    for fact in atomic_facts:
+        field = fact.get("field", "")
+        value = str(fact.get("value", "")).strip()
+        if value and (field, value.lower()) not in seen:
+            seen.add((field, value.lower()))
             raw_values.append(value)
-
-    # Split multi-sentence values into individual claim units
     extracted_claims: list[str] = []
-    for v in raw_values:
-        parts = _split_into_claims(v)
-        # If splitting produces nothing (very short text), keep original as a single claim
-        extracted_claims.extend(parts if parts else [v])
-
+    for value in raw_values:
+        parts = _split_into_claims(value)
+        extracted_claims.extend(parts if parts else [value])
     ext_count = len(extracted_claims)
 
-    if ext_count == 0:
-        # No extracted claims → precision undefined (no claims to be precise about),
-        # recall = 0 (nothing was recovered), F1 = 0
+    common = {
+        "extracted_claim_count": ext_count,
+        "reference_fact_count": ref_count,
+        "source_reference_fact_count": source_count,
+        "exposed_reference_fact_count": ref_count,
+        "reference_fact_exposure_rate": round(exposure_rate, 6) if exposure_rate is not None else None,
+        "matching_algorithm": MATCHING_ALGORITHM,
+        "matching_threshold": threshold,
+        "reference_metrics_scope": "all_case_source_facts_legacy" if legacy_all_facts else "respondent_exposed_facts",
+        "case_id": case_id,
+    }
+    if ref_count == 0:
         return {
+            **common,
+            "reference_fact_precision": 0.0 if ext_count else None,
+            "reference_fact_recall": None,
+            "reference_fact_f1": None,
+            "matched_pair_count": 0,
+            "status": "no_exposed_reference_facts",
+        }
+    if ext_count == 0:
+        return {
+            **common,
             "reference_fact_precision": None,
             "reference_fact_recall": 0.0,
             "reference_fact_f1": 0.0,
-            "extracted_claim_count": 0,
-            "reference_fact_count": ref_count,
             "matched_pair_count": 0,
-            "matching_algorithm": MATCHING_ALGORITHM,
-            "matching_threshold": threshold,
-            "case_id": case_id,
             "status": "no_extracted_claims",
         }
 
-    matched, _ = _bipartite_match(extracted_claims, ref_texts, threshold)
-
+    reference_texts = [fact["text"] for fact in case_ref_facts]
+    matched, _ = _bipartite_match(extracted_claims, reference_texts, threshold)
     precision = matched / ext_count
-    recall = matched / ref_count if ref_count > 0 else 0.0
-    if precision + recall > 0:
-        f1 = 2 * precision * recall / (precision + recall)
-    else:
-        f1 = 0.0
-
+    recall = matched / ref_count
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {
+        **common,
         "reference_fact_precision": round(precision, 6),
         "reference_fact_recall": round(recall, 6),
         "reference_fact_f1": round(f1, 6),
-        "extracted_claim_count": ext_count,
-        "reference_fact_count": ref_count,
         "matched_pair_count": matched,
-        "matching_algorithm": MATCHING_ALGORITHM,
-        "matching_threshold": threshold,
-        "case_id": case_id,
         "status": "ok",
     }
-
 
 def sensitivity_sweep(
     atomic_facts: list[dict],
     reference_facts: list[dict],
     case_id: str,
+    exposed_fact_indices: Optional[set[int]] = None,
 ) -> dict[float, dict]:
     """Run reference-claim matching at all documented sensitivity thresholds.
 
@@ -267,7 +242,10 @@ def sensitivity_sweep(
     This analysis must not be used to tune the default threshold.
     """
     return {
-        t: compute_reference_claim_metrics(atomic_facts, reference_facts, case_id, threshold=t)
+        t: compute_reference_claim_metrics(
+            atomic_facts, reference_facts, case_id, threshold=t,
+            exposed_fact_indices=exposed_fact_indices,
+        )
         for t in SENSITIVITY_THRESHOLDS
     }
 
@@ -378,11 +356,10 @@ def compute_gap_targeting_rate(turns: list[dict], ablation: str = "none") -> dic
     For the `state_machine` ablation, returns None/not-applicable because gap
     selection is intentionally absent.
 
-    For each follow-up interviewer turn (turn_id > 0), a successful gap alignment
-    requires BOTH:
-      1. The turn has a `knowledge_gap_targeted` field matching its `target_field`.
-      2. The target field's status in `knowledge_state_before_question` was
-         "unknown", "candidate", or "conflicting" (i.e., unresolved at question time).
+    For each follow-up interviewer turn (turn_id > 0), success requires that
+    the target field is still unresolved in the pre-question snapshot and the
+    immediately following participant turn contains an extraction update for
+    that field. This matches the operational definition in the thesis.
 
     Follow-up questions with missing or invalid target_field metadata ARE included
     in the denominator — they are not successful alignments.
@@ -415,25 +392,23 @@ def compute_gap_targeting_rate(turns: list[dict], ablation: str = "none") -> dic
             "status": "not_applicable_no_followup_questions",
         }
 
-    UNRESOLVED_STATUSES = {"unknown", "candidate", "conflicting"}
     aligned_count = 0
 
-    for turn in follow_up_qs:
+    for index, turn in enumerate(turns):
+        if turn.get("role") != "interviewer" or turn.get("turn_id", 0) <= 0:
+            continue
         target_field = turn.get("target_field")
-        gap_targeted = turn.get("knowledge_gap_targeted")
-
-        # Must have a target field and it must match the selected gap
-        if not target_field or not gap_targeted:
+        if not target_field:
             continue
-        if target_field != gap_targeted:
-            continue
-
-        # Read the knowledge state BEFORE this question was generated
         state_before = turn.get("knowledge_state_before_question", {})
-        field_state = state_before.get(target_field, {})
-        field_status = field_state.get("status", "unknown")
-
-        if field_status in UNRESOLVED_STATUSES:
+        if state_before.get(target_field, {}).get("status") == "verified":
+            continue
+        # The conversation trace alternates a generated question with the
+        # next participant turn. Do not credit a later update to this question.
+        if index + 1 >= len(turns) or turns[index + 1].get("role") != "participant":
+            continue
+        updates = turns[index + 1].get("extraction", [])
+        if any(isinstance(update, dict) and update.get("field") == target_field for update in updates):
             aligned_count += 1
 
     rate = round(aligned_count / n_eligible, 6)
@@ -527,29 +502,58 @@ def compute_extraction_diagnostics(turns: list[dict]) -> dict:
     llm_count = 0
     fallback_count = 0
     empty_count = 0
+    llm_calls = 0
     total_turns = 0
 
     for t in turns:
         if t.get("role") != "participant":
             continue
         total_turns += 1
-        for upd in t.get("extraction", []):
-            # extraction method is tracked per-update when available
-            pass
-        # Per-turn extraction method is not currently stored directly in participant turn records.
-        # It was returned from InterviewSession._extract() but not written to the participant
-        # turn dict. We return absent counts rather than fabricate zeros.
+        method = t.get("extraction_method")
+        if method == "llm":
+            llm_count += 1
+        elif method == "fallback":
+            fallback_count += 1
+        elif method == "empty":
+            empty_count += 1
+        llm_calls += int(t.get("extraction_llm_calls", 0) or 0)
 
     return {
-        "llm_extraction_count": None,
-        "fallback_extraction_count": None,
-        "empty_extraction_count": None,
-        "status": "unavailable_extraction_method_not_stored_per_turn",
+        "llm_extraction_count": llm_count,
+        "fallback_extraction_count": fallback_count,
+        "empty_extraction_count": empty_count,
+        "extraction_llm_calls": llm_calls,
+        "status": "ok" if total_turns else "no_participant_turns",
         "n_participant_turns": total_turns,
     }
 
 
 # ─── AGGREGATE ENTRYPOINT ─────────────────────────────────────────────────────
+
+def compute_extraction_evidence_support(turns: list[dict], threshold: float = 0.8) -> dict:
+    """Measure whether each extracted update's evidence is grounded in its reply.
+
+    Evidence tokens are compared with the corresponding participant reply.
+    The rate is an automatic lexical support diagnostic, not semantic proof.
+    """
+    update_count = 0
+    supported_count = 0
+    for turn in turns:
+        if turn.get("role") != "participant":
+            continue
+        answer_tokens = _normalise(str(turn.get("text", "")))
+        for update in turn.get("extraction", []) or []:
+            update_count += 1
+            evidence_tokens = _normalise(str(update.get("evidence", "")))
+            if evidence_tokens and answer_tokens:
+                coverage = len(evidence_tokens & answer_tokens) / len(evidence_tokens)
+                supported_count += coverage >= threshold
+    return {
+        "evidence_supported_update_count": supported_count,
+        "evidence_checked_update_count": update_count,
+        "evidence_text_support_rate": round(supported_count / update_count, 6) if update_count else None,
+        "evidence_support_threshold": threshold,
+    }
 
 def compute_all_metrics(
     trace: dict,
@@ -572,16 +576,31 @@ def compute_all_metrics(
         - diagnostics counts for transparency
         - matching metadata (algorithm version, threshold, counts)
 
-    Primary outcome: reference_fact_f1
+    Primary outcome: reference_fact_f1 against facts actually exposed in replies.
     Secondary outcomes: all other keys in this dict
     """
     turns = trace.get("turns", [])
     knowledge_state = trace.get("knowledge_state", {})
     atomic_facts = trace.get("atomic_facts", [])
 
-    # Primary: reference-claim matching
+    # The respondent exposes exact source sentence indices. Restrict the F1
+    # denominator to those sentences; absent metadata must not silently score
+    # all source facts in a production trace.
+    exposure_metadata_present = False
+    exposed_fact_indices: set[int] = set()
+    for turn in turns:
+        if turn.get("role") == "participant" and "respondent_evidence_indices" in turn:
+            exposure_metadata_present = True
+            for source_index in turn.get("respondent_evidence_indices", []) or []:
+                try:
+                    exposed_fact_indices.add(int(source_index))
+                except (TypeError, ValueError):
+                    continue
+
+    # Primary: reference-claim matching conditional on respondent exposure.
     ref_metrics = compute_reference_claim_metrics(
-        atomic_facts, reference_facts or [], case_id, threshold=threshold
+        atomic_facts, reference_facts or [], case_id, threshold=threshold,
+        exposed_fact_indices=exposed_fact_indices if exposure_metadata_present else set(),
     )
 
     # Secondary: structural and process measures
@@ -591,6 +610,7 @@ def compute_all_metrics(
     gap = compute_gap_targeting_rate(turns, ablation=ablation)
     conflict = compute_conflicting_field_rate(knowledge_state)
     evidence = compute_evidence_presence_rate(knowledge_state)
+    evidence_support = compute_extraction_evidence_support(turns)
     extraction_diag = compute_extraction_diagnostics(turns)
 
     return {
@@ -603,8 +623,12 @@ def compute_all_metrics(
         "matching_threshold": ref_metrics["matching_threshold"],
         "extracted_claim_count": ref_metrics["extracted_claim_count"],
         "reference_fact_count": ref_metrics["reference_fact_count"],
+        "source_reference_fact_count": ref_metrics["source_reference_fact_count"],
+        "exposed_reference_fact_count": ref_metrics["exposed_reference_fact_count"],
+        "reference_fact_exposure_rate": ref_metrics["reference_fact_exposure_rate"],
         "matched_pair_count": ref_metrics["matched_pair_count"],
         "reference_metrics_status": ref_metrics["status"],
+        "reference_metrics_scope": ref_metrics["reference_metrics_scope"],
         # Secondary structural metrics
         "schema_completeness": completeness,
         "novel_fields_total": novelty["novel_fields_total"],
@@ -621,7 +645,12 @@ def compute_all_metrics(
         "conflicting_field_count": conflict["conflicting_count"],
         "evidence_presence_rate": evidence["evidence_presence_rate"],
         "fields_with_evidence_count": evidence["fields_with_evidence_count"],
-        # Extraction diagnostics (currently unavailable — stored for future use)
+        **evidence_support,
+        # Extraction diagnostics
+        "llm_extraction_count": extraction_diag["llm_extraction_count"],
+        "fallback_extraction_count": extraction_diag["fallback_extraction_count"],
+        "empty_extraction_count": extraction_diag["empty_extraction_count"],
+        "extraction_llm_calls": extraction_diag["extraction_llm_calls"],
         "extraction_diag_status": extraction_diag["status"],
         # Version
         "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,

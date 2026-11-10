@@ -1,7 +1,7 @@
 # Evaluation Metrics Reference
 
-**Metric schema version**: v2  
-**Matching algorithm**: `lexical_bipartite_v1`  
+**Metric schema version**: v3
+**Matching algorithm**: `lexical_bipartite_exposed_v2`
 **Default matching threshold**: `0.5`
 
 > **Important limitations**: All metrics are simulation-based and reference-based. Lexical matching is a proxy, not verified factual accuracy. Panel agreement does not establish human-preference alignment or real-world correctness. No human evaluation is performed.
@@ -14,9 +14,9 @@
 
 **Type**: float [0, 1] or `null`  
 **Formula**: `2 × P × R / (P + R)`, zero if `P + R = 0`  
-**Null when**: Reference facts are unavailable for the case.
+**Null when**: Reference facts are unavailable or the synthetic respondent disclosed no source sentences in that episode.
 
-The primary outcome metric. Balances precision and recall of extracted claims against the reference fact set. Use this for model comparisons.
+The primary extraction outcome. Balances precision and recall against the full-source sentences that the deterministic synthetic respondent actually disclosed during that episode. This exposure-conditioned denominator fixes the previous mismatch where the benchmark expected only the first 12 sentences but the respondent could disclose any source sentence. Claims are still matched lexically, so this is a reproducible proxy, not semantic or human-verified accuracy.
 
 ---
 
@@ -26,7 +26,7 @@ These metrics quantify how well the model extracted information that can be lexi
 
 ### Matching algorithm
 
-Each extracted claim is compared to each reference fact using the **overlap coefficient**:
+Each extracted claim is compared to each exposed reference sentence using the **overlap coefficient**:
 
 ```
 overlap(A, B) = |tokens(A) ∩ tokens(B)| / max(|tokens(A)|, |tokens(B)|)
@@ -55,9 +55,17 @@ Fraction of reference facts covered by at least one extracted claim.
 
 Number of unique extracted claim units sent into matching. Multi-sentence field values are split into individual claims; duplicates by (field, value) are removed before splitting.
 
-### `reference_fact_count`
+### `reference_fact_count` and `exposed_reference_fact_count`
 
-Number of reference facts for this specific `case_id`.
+`reference_fact_count` is the number of source sentences disclosed in the episode and used as the recall denominator. `exposed_reference_fact_count` is the same quantity for clarity. `source_reference_fact_count` is the complete sentence inventory for the case; it is reported for context but does not count undisclosed facts as misses.
+
+### `reference_fact_exposure_rate`
+
+`exposed_reference_fact_count / source_reference_fact_count`. This describes how much of the case was disclosed by the respondent. It is not an extraction-quality score. Compare it alongside F1 because low exposure means the interviewer had less source content available to extract.
+
+### `reference_metrics_scope`
+
+Production traces use `respondent_exposed_facts`. Traces missing respondent exposure metadata are scored with an empty exposed set and return null F1; they are not silently scored against every source sentence. `all_case_source_facts_legacy` identifies direct calls using the historical denominator.
 
 ### `matched_pair_count`
 
@@ -134,6 +142,10 @@ Fraction of active fields in the `conflicting` state. Conflict detection is lexi
 **Null when**: No populated fields.
 
 Fraction of extracted fields that have non-empty `evidence` metadata. Evidence presence ≠ evidence validity.
+
+### `evidence_text_support_rate`
+
+Fraction of extracted field updates whose recorded evidence has at least the configured lexical support threshold against the participant's disclosed source sentences. This automatic check helps identify unsupported extraction claims; it does not establish semantic entailment or replace human validation.
 
 ---
 

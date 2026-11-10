@@ -6,13 +6,6 @@ from typing import Any, Dict, List, Optional
 import psutil
 
 try:
-    import torch
-    HAS_TORCH = True
-except ImportError:
-    torch = None
-    HAS_TORCH = False
-
-try:
     import pynvml
     HAS_NVML = True
 except ImportError:
@@ -78,7 +71,14 @@ class HardwareDetector:
                 except Exception:
                     pass
 
-        if HAS_TORCH and torch is not None:
+        # PyTorch is a large import. Keep it out of module startup and load it
+        # only when NVML cannot provide accelerator details.
+        try:
+            import torch
+        except ImportError:
+            torch = None
+
+        if torch is not None:
             try:
                 if torch.cuda.is_available():
                     n = torch.cuda.device_count()

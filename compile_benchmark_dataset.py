@@ -25,7 +25,8 @@ import argparse
 import hashlib
 import json
 import random
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -89,23 +90,25 @@ def stable_variant_id(case_id: str, variant_key: str, variant_index: int) -> str
 
 
 def extract_reference_facts(text: str, case_id: str) -> list[dict]:
-    """Extract simple reference facts from a case text.
+    """Create a deterministic source-sentence inventory for one case.
 
-    Facts are extracted as atomic sentences covering different schema fields.
-    This is deterministic and does NOT use an LLM (to remain stable).
-
-    Limitation: sentence-splitting is an approximation. Reference facts are
-    NOT independently verified by human annotators. Lexical matching against
-    these facts is a proxy measure, not ground-truth factual accuracy.
+    Use the same punctuation boundary and minimum word count as the synthetic
+    respondent so ``source_index`` maps exactly to its ``evidence_indices``.
+    Keep the full source inventory; episode scoring filters it to sentences
+    that the respondent actually disclosed.
     """
-    sentences = [s.strip() for s in text.replace("\n", " ").split(".") if len(s.strip()) > 20]
+    sentences = [
+        sent.strip()
+        for sent in re.split(r"(?<=[.!?])\s+", text.strip())
+        if len(sent.strip().split()) >= 5
+    ]
     facts = []
-    for i, sent in enumerate(sentences[:12]):  # up to 12 reference facts per case
-        fact_id = f"{case_id}_fact{i:02d}"
+    for i, sent in enumerate(sentences):
+        fact_id = f"{case_id}_fact{i:04d}"
         facts.append({
             "fact_id": fact_id,
             "case_id": case_id,
-            "text": sent + ".",
+            "text": sent,
             "source_index": i,
         })
     return facts
@@ -202,12 +205,12 @@ def compile_benchmark(
     with open(BENCHMARK_CASES_PATH, "w", encoding="utf-8") as f:
         for rec in all_cases:
             f.write(json.dumps(rec) + "\n")
-    print(f"  Benchmark cases → {BENCHMARK_CASES_PATH}")
+    print(f"  Benchmark cases -> {BENCHMARK_CASES_PATH}")
 
     with open(BENCHMARK_FACTS_PATH, "w", encoding="utf-8") as f:
         for rec in all_facts:
             f.write(json.dumps(rec) + "\n")
-    print(f"  Benchmark facts → {BENCHMARK_FACTS_PATH}")
+    print(f"  Benchmark facts -> {BENCHMARK_FACTS_PATH}")
 
     # ── Compute hashes and write manifest ────────────────────────────────────
     cases_hash = _sha256_file(BENCHMARK_CASES_PATH)
@@ -221,13 +224,14 @@ def compile_benchmark(
             seen_cases.add(rec["case_id"])
 
     manifest = {
-        "compiled_at": datetime.utcnow().isoformat() + "Z",
+        "compiled_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "source_dataset": SOURCE_DATASET,
         "seed": seed,
         "limit": limit,
         "source_cases": len(uids),
         "benchmark_cases": len(all_cases),
         "reference_facts": len(all_facts),
+        "reference_fact_method": "full_source_sentence_inventory_v2",
         "category_distribution": cat_dist,
         "file_hashes": {
             "benchmark_cases_sha256": cases_hash,
@@ -238,7 +242,7 @@ def compile_benchmark(
 
     with open(BENCHMARK_MANIFEST_PATH, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
-    print(f"  Manifest → {BENCHMARK_MANIFEST_PATH}")
+    print(f"  Manifest -> {BENCHMARK_MANIFEST_PATH}")
 
     return manifest
 
@@ -253,7 +257,7 @@ def main():
     args = parser.parse_args()
 
     stats = compile_benchmark(limit=args.limit, seed=args.seed, force=args.force)
-    print("\n── Benchmark Summary ──────────────────────────────────────────")
+    print("\n-- Benchmark Summary ------------------------------------------")
     for k, v in stats.items():
         print(f"  {k}: {v}")
 

@@ -1,0 +1,6 @@
+# Optional dependencies for notebooks/thesis_results_analysis.ipynb
+pandas>=2.0
+numpy>=1.26
+matplotlib>=3.8
+jupyter>=1.0
+ipykernel>=6.29

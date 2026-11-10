@@ -18,7 +18,7 @@ def slugify(name: str) -> str:
 
 def select_judges(
     hardware: Dict[str, Any],
-    top_n: int = 3,
+    top_n: int = 4,
     quant: str = "auto",
     context_length: int = 4096,
     families: Optional[List[str]] = None

@@ -1,0 +1,20 @@
+{
+  "compiled_at": "2026-11-10T12:36:01.692842Z",
+  "source_dataset": "ozguragrali/enterprise-knowledge-qa-dataset-gemini-flash-for-t5-large",
+  "seed": 42,
+  "limit": null,
+  "source_cases": 3,
+  "benchmark_cases": 57,
+  "reference_facts": 4649,
+  "reference_fact_method": "full_source_sentence_inventory_v2",
+  "category_distribution": {
+    "legal": 1,
+    "healthcare": 1,
+    "retail": 1
+  },
+  "file_hashes": {
+    "benchmark_cases_sha256": "aaea6166350ee50e153e2fb7e74855dc2af7f34a66d86d55d1cf544623c23032",
+    "benchmark_facts_sha256": "36552703ac6fc71960907aa0b39a07e7bd378bf77cf7b880356c852de07ef87c"
+  },
+  "combined_hash": "8a6b0d0a65c5a592"
+}

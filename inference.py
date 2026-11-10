@@ -1,8 +1,11 @@
 import os
 import time
+import logging
 import requests
 from abc import ABC, abstractmethod
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class ChatRunner(ABC):
@@ -29,7 +32,15 @@ class ChatRunner(ABC):
 class LlamaCppRunner(ChatRunner):
     """ChatRunner backed by a llama-cpp-python Llama instance."""
 
-    def __init__(self, model_path: str, n_ctx: int = 2048, n_threads: int = 4, verbose: bool = False):
+    def __init__(
+        self,
+        model_path: str,
+        n_ctx: int = 2048,
+        n_threads: int = 4,
+        n_gpu_layers: int = 0,
+        n_batch: int = 512,
+        verbose: bool = False,
+    ):
         try:
             from llama_cpp import Llama
         except ImportError as exc:
@@ -38,12 +49,28 @@ class LlamaCppRunner(ChatRunner):
                 "Install it: pip install llama-cpp-python --extra-index-url "
                 "https://abetlen.github.io/llama-cpp-python/whl/cpu"
             ) from exc
-        self._llm = Llama(
-            model_path=model_path,
-            n_ctx=n_ctx,
-            n_threads=n_threads,
-            verbose=verbose,
-        )
+        load_args = {
+            "model_path": model_path,
+            "n_ctx": n_ctx,
+            "n_threads": n_threads,
+            "n_batch": n_batch,
+            "n_gpu_layers": n_gpu_layers,
+            "verbose": verbose,
+        }
+        try:
+            self._llm = Llama(**load_args)
+        except Exception:
+            # A detected accelerator is not always supported by the installed
+            # llama-cpp-python wheel. Preserve a working CPU path in that case.
+            if n_gpu_layers <= 0:
+                raise
+            logger.warning(
+                "Could not load %s with %s GPU layers; retrying on CPU. "
+                "Install a llama-cpp-python build compatible with the detected accelerator to use GPU offload.",
+                model_path, n_gpu_layers,
+            )
+            load_args["n_gpu_layers"] = 0
+            self._llm = Llama(**load_args)
 
     def generate(
         self,
