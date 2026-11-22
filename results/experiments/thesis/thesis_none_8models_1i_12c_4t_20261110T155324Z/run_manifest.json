@@ -1,0 +1,212 @@
+{
+  "experiment_id": "thesis_none_8models_1i_12c_4t_20261110T155324Z",
+  "profile": "thesis",
+  "created_at_utc": "2026-11-10T15:53:24.476749+00:00",
+  "config_fingerprint": "7e0673a116d73fa916580963fd0806aa5015e7b4b056f82bdc0d535ee15314ea",
+  "config": {
+    "dataset_name": "ozguragrali/enterprise-knowledge-qa",
+    "dataset_version": "v1",
+    "model_ids": [
+      "phi-3.5-mini-instruct",
+      "llama-3.2-3b-instruct",
+      "qwen2.5-3b-instruct",
+      "deepseek-r1-distill-qwen-1.5b",
+      "qwen3-1.7b",
+      "phi-4-mini-instruct",
+      "qwen2.5-1.5b-instruct",
+      "llama-3.2-1b-instruct"
+    ],
+    "judge_ids": [],
+    "chroma_collection": "ai4care_knowledge",
+    "effective_extraction_temperature": 0.0,
+    "effective_question_temperature": 0.7,
+    "max_tokens": 200,
+    "n_ctx": 2048,
+    "top_k": 5,
+    "max_turns": 4,
+    "completion_threshold": 0.75,
+    "iterations": 1,
+    "cases_per_iteration": 12,
+    "sampling_mode": "balanced_source_and_variant",
+    "random_seed": 1234,
+    "ablation": "none",
+    "run_profile": "thesis",
+    "n_threads_per_worker": 4
+  },
+  "benchmark_hash": "8a6b0d0a65c5a592",
+  "benchmark_cases_available": 57,
+  "independent_source_cases": 3,
+  "sampling_unit": "balanced_benchmark_variants_clustered_by_source_group",
+  "hardware": {
+    "os": "Windows",
+    "machine": "AMD64",
+    "cpu_cores": 16,
+    "ram_gb": 15.39,
+    "vram_gb": 15.39,
+    "gpu_name": "CPU Only",
+    "gpu_count": 0,
+    "memory_kind": "system_ram",
+    "is_unified_memory": false
+  },
+  "model_selection": {
+    "method": "estimator hardware fit at Q4_K_M / 2048 context",
+    "requested_count": 8,
+    "selected_models": [
+      {
+        "model_id": "phi-3.5-mini-instruct",
+        "name": "Phi-3.5-mini-instruct",
+        "repo": "microsoft/Phi-3.5-mini-instruct",
+        "family": "Phi",
+        "params_b": 3.82,
+        "quant": "Q4_K_M",
+        "context_length": 2048,
+        "estimated_memory_gb": 3.67,
+        "max_concurrent_at_estimate": 3,
+        "selection_source": "estimator_hardware_fit_ranked"
+      },
+      {
+        "model_id": "llama-3.2-3b-instruct",
+        "name": "Llama-3.2-3B-Instruct",
+        "repo": "meta-llama/Llama-3.2-3B-Instruct",
+        "family": "Llama 3.2",
+        "params_b": 3.21,
+        "quant": "Q4_K_M",
+        "context_length": 2048,
+        "estimated_memory_gb": 2.58,
+        "max_concurrent_at_estimate": 5,
+        "selection_source": "estimator_hardware_fit_ranked"
+      },
+      {
+        "model_id": "qwen2.5-3b-instruct",
+        "name": "Qwen2.5-3B-Instruct",
+        "repo": "Qwen/Qwen2.5-3B-Instruct",
+        "family": "Qwen2.5",
+        "params_b": 3.09,
+        "quant": "Q4_K_M",
+        "context_length": 2048,
+        "estimated_memory_gb": 2.31,
+        "max_concurrent_at_estimate": 5,
+        "selection_source": "estimator_hardware_fit_ranked"
+      },
+      {
+        "model_id": "deepseek-r1-distill-qwen-1.5b",
+        "name": "DeepSeek-R1-Distill-Qwen-1.5B",
+        "repo": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+        "family": "DeepSeek R1 Distill",
+        "params_b": 1.78,
+        "quant": "Q4_K_M",
+        "context_length": 2048,
+        "estimated_memory_gb": 1.35,
+        "max_concurrent_at_estimate": 10,
+        "selection_source": "estimator_hardware_fit_ranked"
+      },
+      {
+        "model_id": "qwen3-1.7b",
+        "name": "Qwen3-1.7B",
+        "repo": "Qwen/Qwen3-1.7B",
+        "family": "Qwen3",
+        "params_b": 1.78,
+        "quant": "Q4_K_M",
+        "context_length": 2048,
+        "estimated_memory_gb": 1.55,
+        "max_concurrent_at_estimate": 8,
+        "selection_source": "estimator_hardware_fit_ranked"
+      },
+      {
+        "model_id": "phi-4-mini-instruct",
+        "name": "Phi-4-mini-instruct",
+        "repo": "microsoft/Phi-4-mini-instruct",
+        "family": "Phi",
+        "params_b": 3.8,
+        "quant": "Q4_K_M",
+        "context_length": 2048,
+        "estimated_memory_gb": 3.04,
+        "max_concurrent_at_estimate": 4,
+        "selection_source": "estimator_hardware_fit_ranked"
+      },
+      {
+        "model_id": "qwen2.5-1.5b-instruct",
+        "name": "Qwen2.5-1.5B-Instruct",
+        "repo": "Qwen/Qwen2.5-1.5B-Instruct",
+        "family": "Qwen2.5",
+        "params_b": 1.54,
+        "quant": "Q4_K_M",
+        "context_length": 2048,
+        "estimated_memory_gb": 1.17,
+        "max_concurrent_at_estimate": 11,
+        "selection_source": "estimator_hardware_fit_ranked"
+      },
+      {
+        "model_id": "llama-3.2-1b-instruct",
+        "name": "Llama-3.2-1B-Instruct",
+        "repo": "meta-llama/Llama-3.2-1B-Instruct",
+        "family": "Llama 3.2",
+        "params_b": 1.23,
+        "quant": "Q4_K_M",
+        "context_length": 2048,
+        "estimated_memory_gb": 0.96,
+        "max_concurrent_at_estimate": 14,
+        "selection_source": "estimator_hardware_fit_ranked"
+      }
+    ]
+  },
+  "backend": "local",
+  "workers": 4,
+  "threads_per_worker": 4,
+  "gpu_layers": 0,
+  "paths": {
+    "traces": "results\\experiments\\thesis\\thesis_none_8models_1i_12c_4t_20261110T155324Z\\evaluation_traces.jsonl",
+    "results_csv": "results\\experiments\\thesis\\thesis_none_8models_1i_12c_4t_20261110T155324Z\\evaluation_results.csv",
+    "judge_output": "results\\experiments\\thesis\\thesis_none_8models_1i_12c_4t_20261110T155324Z\\judges",
+    "analysis_output": "results\\experiments\\thesis\\thesis_none_8models_1i_12c_4t_20261110T155324Z\\analysis"
+  },
+  "stage_status": {
+    "generation": "complete",
+    "judging": "complete",
+    "analysis": "complete"
+  },
+  "expected_episode_count": 96,
+  "judges_used": [
+    "llama-3.2-3b-instruct_Q8_0",
+    "phi-3.5-mini-instruct_Q8_0",
+    "qwen2.5-3b-instruct_Q8_0",
+    "qwen3-14b_Q5_K_M"
+  ],
+  "judge_sampling": {
+    "strategy": "all_successful_traces",
+    "sample_per_model_source": 0,
+    "seed": 42,
+    "available_traces": 96,
+    "sampled_traces": 96,
+    "strata_count": 24,
+    "strata": {
+      "deepseek-r1-distill-qwen-1.5b|33042a3e-5e8e-4375-b964-0fe2252e504c": 4,
+      "deepseek-r1-distill-qwen-1.5b|af4b9da3-16de-4510-a1cb-2a32e101c884": 4,
+      "deepseek-r1-distill-qwen-1.5b|e23add42-dc9f-4b46-aa21-ac722ae16c36": 4,
+      "llama-3.2-1b-instruct|33042a3e-5e8e-4375-b964-0fe2252e504c": 4,
+      "llama-3.2-1b-instruct|af4b9da3-16de-4510-a1cb-2a32e101c884": 4,
+      "llama-3.2-1b-instruct|e23add42-dc9f-4b46-aa21-ac722ae16c36": 4,
+      "llama-3.2-3b-instruct|33042a3e-5e8e-4375-b964-0fe2252e504c": 4,
+      "llama-3.2-3b-instruct|af4b9da3-16de-4510-a1cb-2a32e101c884": 4,
+      "llama-3.2-3b-instruct|e23add42-dc9f-4b46-aa21-ac722ae16c36": 4,
+      "phi-3.5-mini-instruct|33042a3e-5e8e-4375-b964-0fe2252e504c": 4,
+      "phi-3.5-mini-instruct|af4b9da3-16de-4510-a1cb-2a32e101c884": 4,
+      "phi-3.5-mini-instruct|e23add42-dc9f-4b46-aa21-ac722ae16c36": 4,
+      "phi-4-mini-instruct|33042a3e-5e8e-4375-b964-0fe2252e504c": 4,
+      "phi-4-mini-instruct|af4b9da3-16de-4510-a1cb-2a32e101c884": 4,
+      "phi-4-mini-instruct|e23add42-dc9f-4b46-aa21-ac722ae16c36": 4,
+      "qwen2.5-1.5b-instruct|33042a3e-5e8e-4375-b964-0fe2252e504c": 4,
+      "qwen2.5-1.5b-instruct|af4b9da3-16de-4510-a1cb-2a32e101c884": 4,
+      "qwen2.5-1.5b-instruct|e23add42-dc9f-4b46-aa21-ac722ae16c36": 4,
+      "qwen2.5-3b-instruct|33042a3e-5e8e-4375-b964-0fe2252e504c": 4,
+      "qwen2.5-3b-instruct|af4b9da3-16de-4510-a1cb-2a32e101c884": 4,
+      "qwen2.5-3b-instruct|e23add42-dc9f-4b46-aa21-ac722ae16c36": 4,
+      "qwen3-1.7b|33042a3e-5e8e-4375-b964-0fe2252e504c": 4,
+      "qwen3-1.7b|af4b9da3-16de-4510-a1cb-2a32e101c884": 4,
+      "qwen3-1.7b|e23add42-dc9f-4b46-aa21-ac722ae16c36": 4
+    }
+  },
+  "analysis_amendments": {
+    "rq3": "Post-completion descriptive quality analysis using rubric scores 3\u20134; this does not answer the original inter-rater reliability question."
+  }
+}

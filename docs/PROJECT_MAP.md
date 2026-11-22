@@ -8,11 +8,11 @@ This guide lists the files needed for the thesis workflow and the order to use t
 2. **Vector store:** run `python setup.py` once to initialise the shared Chroma collection.
 3. **Corpus:** run `curate_seed_corpus.py` when the source corpus must be rebuilt. It writes the reproducible corpus under `data/corpus/` and fills the `corpus` namespace in ChromaDB.
 4. **Benchmark:** run `compile_benchmark_dataset.py` once to create the frozen cases, full sentence-level reference inventory, and manifest in `data/benchmark/`. Rebuild only when the corpus or benchmark/scoring design changes, and keep its hash with each run.
-5. **Interviews:** `python evaluate.py --profile thesis --models all` starts the compact main thesis run. The hardware estimator selects eight fitting compact models. The default sample is 12 variants balanced across the three source groups, with at most four participant replies per interview. A `pilot` profile is only a pipeline check. `full` evaluates every available variant.
+5. **Interviews:** `python evaluate.py --profile thesis --models all` starts the compact main thesis run. The hardware estimator selects eight fitting compact models. The default sample is 12 variants balanced across the three source groups, with up to 10 participant replies per interview and early stopping at the schema-completion threshold. A `pilot` profile is only a pipeline check. `full` evaluates every available variant.
 6. **Judges:** `python judge_benchmark.py --experiment-dir <run-folder>` runs the estimator-selected panel of three small and one larger judge where hardware permits. The default deterministic sample uses up to one trace per interviewer-model/source-group stratum.
 7. **Analysis:** run `python analyze_experiment.py --experiment-dir <run-folder>`, then use `notebooks/thesis_results_analysis.ipynb` for the detailed tables, plots, interpretation rules, and missing-data explanation.
 
-The run ID records the profile, ablation, number of interviewer models, iterations, selected benchmark cases, reply cap, and UTC creation time. For example: `thesis_none_8models_1i_12c_4t_20261110T120000Z`. `pilot_...` and `thesis_...` runs are therefore distinct, and experiment outputs stay under profile-specific folders.
+The run ID records the profile, ablation, number of interviewer models, iterations, selected benchmark cases, reply cap, and UTC creation time. For example: `thesis_none_8models_1i_12c_10t_20261110T120000Z`. `pilot_...` and `thesis_...` runs are therefore distinct, and experiment outputs stay under profile-specific folders.
 
 ## Maintained code by responsibility
 

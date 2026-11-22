@@ -24,7 +24,7 @@ from typing import Optional
 
 # ─── VERSION ─────────────────────────────────────────────────────────────────
 
-EVALUATION_SCHEMA_VERSION = "v3"
+EVALUATION_SCHEMA_VERSION = "v4"
 MATCHING_ALGORITHM = "lexical_bipartite_exposed_v2"
 DEFAULT_MATCH_THRESHOLD = 0.5   # at least half of unique tokens in the longer set must be shared
 SENSITIVITY_THRESHOLDS = (0.25, 0.5, 0.75)

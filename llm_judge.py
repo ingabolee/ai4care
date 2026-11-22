@@ -4,7 +4,7 @@ llm_judge.py -- Independent MoE Judge logic.
 Evaluates interview transcripts post-hoc using a single structured metric:
     follow_up_question_quality  (ordinal integer 0 – 4)
 
-Metric schema version: v2
+Metric schema version: v2; judge response schema: v3
 
 The judge assesses observable transcript-level question quality only.
 It does NOT claim to measure:
@@ -23,6 +23,7 @@ import json
 import math
 import time
 import ast
+import re
 from typing import Optional
 from copy import deepcopy
 
@@ -33,7 +34,7 @@ from inference import ChatRunner
 METRIC = "follow_up_question_quality"
 METRIC_VERSION = "v2"
 VALID_SCORE_RANGE = (0, 4)   # inclusive, integer
-JUDGE_SCHEMA_VERSION = "v2"
+JUDGE_SCHEMA_VERSION = "v3"
 
 RUBRIC = """\
 Score the OVERALL follow-up-question quality for this transcript on a 0–4 ordinal scale:
@@ -44,12 +45,21 @@ Score the OVERALL follow-up-question quality for this transcript on a 0–4 ordi
   3 — Good: Follow-ups are generally clear, relevant, specific, and appropriately connected to prior responses.
   4 — Excellent: Follow-ups are consistently clear, specific, answerable, non-leading, and coherent, advancing a useful line of inquiry.
 
-Return ONLY a JSON object with exactly these two keys:
+Return ONLY a JSON object with exactly this one key:
   "follow_up_question_quality": <integer 0, 1, 2, 3, or 4>
-  "supporting_evidence": "<one to three sentences citing specific transcript turns>"
 
-Do NOT include markdown, code fences, prose outside the JSON, or any additional keys.
+Do NOT include evidence, strings, markdown, code fences, prose, or additional keys.
+Keep the response minimal. The score is the only output required.
 """
+
+JUDGE_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        METRIC: {"type": "integer", "enum": [0, 1, 2, 3, 4]},
+    },
+    "required": [METRIC],
+    "additionalProperties": False,
+}
 
 # ─── LEGACY METRIC LIST (kept for backward reference only — NOT active) ───────
 
@@ -99,6 +109,27 @@ def _scrub_json(raw: str) -> str:
     return raw[start:]
 
 
+def _sanitize_unicode_text(text: str) -> str:
+    """Replace unpaired UTF-16 surrogates before sending text to model backends."""
+    clean = []
+    i = 0
+    while i < len(text):
+        codepoint = ord(text[i])
+        if 0xD800 <= codepoint <= 0xDBFF:
+            if i + 1 < len(text) and 0xDC00 <= ord(text[i + 1]) <= 0xDFFF:
+                low = ord(text[i + 1])
+                clean.append(chr(0x10000 + ((codepoint - 0xD800) << 10) + (low - 0xDC00)))
+                i += 2
+                continue
+            clean.append("\uFFFD")
+        elif 0xDC00 <= codepoint <= 0xDFFF:
+            clean.append("\uFFFD")
+        else:
+            clean.append(text[i])
+        i += 1
+    return "".join(clean)
+
+
 def sanitize_trace(trace: dict) -> list[dict]:
     """Strip all candidate model metadata, timing, and extraction data.
 
@@ -110,7 +141,7 @@ def sanitize_trace(trace: dict) -> list[dict]:
         if turn["role"] in ("interviewer", "participant"):
             transcript.append({
                 "role": turn["role"],
-                "text": turn["text"],
+                "text": _sanitize_unicode_text(turn["text"]),
             })
     return transcript
 
@@ -167,6 +198,51 @@ def _validate_score(parsed: dict) -> tuple[Optional[int], Optional[str], Optiona
     return score, None, None
 
 
+def _parse_score_response(raw: str) -> tuple[Optional[int], Optional[str], Optional[str]]:
+    """Parse the score and salvage it from incomplete JSON when possible.
+
+    The v3 output schema contains no free-text strings, removing the long
+    evidence value that previously produced unterminated JSON. The keyed-value
+    fallback also handles a backend that truncates or decorates its response.
+    """
+    json_text = _scrub_json(raw)
+    try:
+        parsed = json.loads(json_text)
+    except (json.JSONDecodeError, ValueError):
+        try:
+            parsed = ast.literal_eval(json_text)
+        except (ValueError, SyntaxError, MemoryError, RecursionError):
+            parsed = None
+
+    if isinstance(parsed, dict):
+        return _validate_score(parsed)
+    if isinstance(parsed, bool):
+        return _validate_score({METRIC: parsed})
+    if isinstance(parsed, (int, float)):
+        return _validate_score({METRIC: parsed})
+    if isinstance(parsed, str) and re.fullmatch(r"\s*[0-4]\s*", parsed):
+        return _validate_score({METRIC: parsed.strip()})
+
+    # Recover a numeric score even if trailing JSON was cut off. This also
+    # covers old outputs whose evidence string ended without a closing quote.
+    score_match = re.search(
+        rf"[\"']?{re.escape(METRIC)}[\"']?\s*:\s*(-?(?:\d+(?:\.\d*)?|\.\d+))",
+        raw,
+    )
+    if score_match:
+        return _validate_score({METRIC: score_match.group(1)})
+
+    # Some small instruct models ignore JSON mode and return a labeled score.
+    # Only accept a single unambiguous ordinal value, never a digit in prose.
+    bare_score = re.fullmatch(
+        r"\s*(?:score\s*[:=]\s*)?([0-4])\s*[.!]?\s*", raw, flags=re.IGNORECASE
+    )
+    if bare_score:
+        return _validate_score({METRIC: bare_score.group(1)})
+
+    return None, FAILURE_PARSE, "Judge response did not contain a parseable ordinal score"
+
+
 # ─── JUDGE CLASS ──────────────────────────────────────────────────────────────
 
 class LLMJudge:
@@ -196,73 +272,73 @@ class LLMJudge:
             "You are an expert qualitative research evaluator assessing AI interviewer transcripts.\n\n"
             + RUBRIC
         )
-        user_msg = f"Transcript:\n\n{transcript_text}\n\nProvide your assessment as JSON:"
+        user_msg = (
+            f"Transcript:\n\n{transcript_text}\n\n"
+            "Return only the JSON score object. Do not provide evidence or any other text."
+        )
 
         score = None
         supporting_evidence = None
         success = False
         failure_type = None
         failure_reason = None
-        raw_response = ""
         prompt_tokens = 0
         completion_tokens = 0
 
-        try:
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_msg},
-            ]
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_msg},
+        ]
+        for attempt in range(2):
             try:
-                resp = self.runner.generate(
-                    messages=messages,
-                    max_tokens=192,
-                    temperature=0.1,
-                    response_format={"type": "json_object"},
-                )
-            except TypeError:
-                # Keep compatibility with third-party ChatRunner adapters that
-                # implement the older signature without response_format.
-                resp = self.runner.generate(
-                    messages=messages,
-                    max_tokens=192,
-                    temperature=0.1,
-                )
-            raw_response = str(resp.get("text") or "")
-            prompt_tokens = resp.get("prompt_tokens", 0) or 0
-            completion_tokens = resp.get("completion_tokens", 0) or 0
-
-            json_text = _scrub_json(raw_response)
-            try:
-                parsed = json.loads(json_text)
-            except (json.JSONDecodeError, ValueError) as exc:
-                # Some local instruct models emit Python-style single quoted
-                # objects despite the JSON-only instruction. literal_eval is
-                # restricted to data literals and never executes model text.
                 try:
-                    parsed = ast.literal_eval(json_text)
-                except (ValueError, SyntaxError, MemoryError, RecursionError):
-                    failure_type = FAILURE_PARSE
-                    failure_reason = f"JSON parse error: {exc}"
-                else:
-                    score, failure_type, failure_reason = _validate_score(parsed)
-                    if score is not None:
-                        success = True
-                        supporting_evidence = str(parsed.get("supporting_evidence", ""))[:500]
-            else:
-                score, failure_type, failure_reason = _validate_score(parsed)
-                if score is not None:
-                    success = True
-                    supporting_evidence = str(parsed.get("supporting_evidence", ""))[:500]
+                    resp = self.runner.generate(
+                        messages=messages,
+                        max_tokens=64,
+                        temperature=0.1,
+                        response_format={"type": "json_object", "schema": JUDGE_RESPONSE_SCHEMA},
+                    )
+                except TypeError:
+                    # Keep compatibility with third-party ChatRunner adapters
+                    # that implement the older signature without response_format.
+                    resp = self.runner.generate(
+                        messages=messages,
+                        max_tokens=64,
+                        temperature=0.1,
+                    )
+            except Exception as exc:
+                failure_type = FAILURE_INFERENCE
+                failure_reason = f"Inference error: {exc}"
+                if attempt == 0:
+                    continue
+                break
 
-        except Exception as exc:
-            failure_type = FAILURE_INFERENCE
-            failure_reason = f"Inference error: {exc}"
+            prompt_tokens += resp.get("prompt_tokens", 0) or 0
+            completion_tokens += resp.get("completion_tokens", 0) or 0
+            score, failure_type, failure_reason = _parse_score_response(
+                str(resp.get("text") or "")
+            )
+            success = score is not None
+            if success or attempt == 1:
+                break
+
+            # One short retry handles occasional malformed or empty outputs.
+            messages = [
+                {"role": "system", "content": "Return one JSON object with the required integer score only."},
+                {"role": "user", "content": (
+                    f"{user_msg}\n\nThe previous response could not be read. "
+                    f"Return exactly {{\"{METRIC}\": 0}}, {{\"{METRIC}\": 1}}, "
+                    f"{{\"{METRIC}\": 2}}, {{\"{METRIC}\": 3}}, or "
+                    f"{{\"{METRIC}\": 4}}."
+                )},
+            ]
 
         latency_ms = int((time.time() - start_time) * 1000)
 
         return {
             "judge_id": self.judge_id,
             "metric_version": METRIC_VERSION,
+            "judge_schema_version": JUDGE_SCHEMA_VERSION,
             "score": score,
             "supporting_evidence": supporting_evidence,
             "success": success,

@@ -1,0 +1,100 @@
+{
+  "iteration_id": "0001",
+  "seed": 1892932127,
+  "dataset_version": "v1",
+  "benchmark_hash": "8a6b0d0a65c5a592",
+  "config_fingerprint": "7e0673a116d73fa916580963fd0806aa5015e7b4b056f82bdc0d535ee15314ea",
+  "sampling_mode": "balanced_source_and_variant",
+  "n_cases": 12,
+  "cases": [
+    {
+      "case_id": "case_8b29225c97",
+      "case_group_id": "33042a3e-5e8e-4375-b964-0fe2252e504c",
+      "question_variant_id": "5ae9fc7b",
+      "variant_key": "challenge",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "case_group_id": "af4b9da3-16de-4510-a1cb-2a32e101c884",
+      "question_variant_id": "a6fd5c1e",
+      "variant_key": "root_cause",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "case_group_id": "33042a3e-5e8e-4375-b964-0fe2252e504c",
+      "question_variant_id": "7adec3ba",
+      "variant_key": "root_cause",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "case_group_id": "e23add42-dc9f-4b46-aa21-ac722ae16c36",
+      "question_variant_id": "65502695",
+      "variant_key": "people",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "case_group_id": "e23add42-dc9f-4b46-aa21-ac722ae16c36",
+      "question_variant_id": "0b3f7b30",
+      "variant_key": "root_cause",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "case_group_id": "e23add42-dc9f-4b46-aa21-ac722ae16c36",
+      "question_variant_id": "025a60f2",
+      "variant_key": "technology",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_a627525fa9",
+      "case_group_id": "e23add42-dc9f-4b46-aa21-ac722ae16c36",
+      "question_variant_id": "01c5f7c5",
+      "variant_key": "impact",
+      "category": "retail"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "case_group_id": "af4b9da3-16de-4510-a1cb-2a32e101c884",
+      "question_variant_id": "ffa73cf9",
+      "variant_key": "lessons_learned",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "case_group_id": "33042a3e-5e8e-4375-b964-0fe2252e504c",
+      "question_variant_id": "037d9fc5",
+      "variant_key": "lessons_learned",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "case_group_id": "af4b9da3-16de-4510-a1cb-2a32e101c884",
+      "question_variant_id": "6cf5747c",
+      "variant_key": "people",
+      "category": "healthcare"
+    },
+    {
+      "case_id": "case_8b29225c97",
+      "case_group_id": "33042a3e-5e8e-4375-b964-0fe2252e504c",
+      "question_variant_id": "20c3f34c",
+      "variant_key": "overall",
+      "category": "legal"
+    },
+    {
+      "case_id": "case_72932afe74",
+      "case_group_id": "af4b9da3-16de-4510-a1cb-2a32e101c884",
+      "question_variant_id": "c4199642",
+      "variant_key": "technology",
+      "category": "healthcare"
+    }
+  ],
+  "category_distribution": {
+    "legal": 4,
+    "healthcare": 4,
+    "retail": 4
+  }
+}

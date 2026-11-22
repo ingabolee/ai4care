@@ -284,6 +284,10 @@ def main():
         "--skip-summary", action="store_true",
         help="Skip writing the JSON summary file."
     )
+    parser.add_argument(
+        "--retry-failed-run-id", action="append", default=None,
+        help="Retry cached failed judge results for this run ID only; repeat the option for more IDs."
+    )
     args = parser.parse_args()
     if args.concurrency < 0:
         parser.error("--concurrency must be 0 (automatic) or a positive integer.")
@@ -374,6 +378,7 @@ def main():
     # Load already-scored (judge_id, run_id) pairs to avoid re-scoring
     completed: set[tuple[str, str]] = set()
     cached: dict[tuple[str, str], dict] = {}
+    retry_failed_run_ids = set(args.retry_failed_run_id or [])
     if partial_path.exists():
         with open(partial_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -382,7 +387,23 @@ def main():
                     continue
                 try:
                     rec = json.loads(line)
+                    # Re-score cached entries created with the old response
+                    # schema; v3 no longer asks small judges for free text.
+                    if rec.get("result", {}).get("judge_schema_version") != JUDGE_SCHEMA_VERSION:
+                        continue
                     key = (rec["judge_id"], rec["run_id"])
+                    if (
+                        rec["run_id"] in retry_failed_run_ids
+                        and not rec.get("result", {}).get("success", False)
+                    ):
+                        continue
+                    if (
+                        args.sample_per_model_source == 0
+                        and not rec.get("result", {}).get("success", False)
+                    ):
+                        # In exhaustive mode, a failed score is not a completed
+                        # checkpoint. Retry it if a walltime continuation resumes.
+                        continue
                     completed.add(key)
                     cached[key] = rec["result"]
                 except (json.JSONDecodeError, KeyError):
@@ -642,6 +663,40 @@ def main():
                 "panel_status": agg["status"],
                 "judge_schema_version": JUDGE_SCHEMA_VERSION,
             })
+
+    # Keep the experiment's main results table aligned with the panel artifact.
+    if experiment_dir:
+        results_csv_path = experiment_dir / "evaluation_results.csv"
+        if results_csv_path.exists():
+            with open(aggr_csv_path, newline="", encoding="utf-8") as af:
+                aggregate_by_run = {
+                    row["run_id"]: row
+                    for row in csv.DictReader(af)
+                }
+            with open(results_csv_path, newline="", encoding="utf-8") as rf:
+                reader = csv.DictReader(rf)
+                result_rows = list(reader)
+                result_fields = list(reader.fieldnames or [])
+            for field in (
+                "follow_up_question_quality", "judge_disagreement_mad",
+                "successful_judges", "total_judges", "judge_schema_version",
+            ):
+                if field not in result_fields:
+                    result_fields.append(field)
+            for row in result_rows:
+                aggregate = aggregate_by_run.get(row.get("run_id", ""))
+                if aggregate is None:
+                    continue
+                row["follow_up_question_quality"] = aggregate["panel_median"]
+                row["judge_disagreement_mad"] = aggregate["disagreement_mad"]
+                row["successful_judges"] = aggregate["successful_judges"]
+                row["total_judges"] = aggregate["total_judges"]
+                row["judge_schema_version"] = aggregate["judge_schema_version"]
+            with open(results_csv_path, "w", newline="", encoding="utf-8") as rf:
+                writer = csv.DictWriter(rf, fieldnames=result_fields, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(result_rows)
+            print(f"  -> Updated {results_csv_path} with panel aggregates")
 
     print(f"  -> {long_csv_path}")
     print(f"  -> {aggr_csv_path}")

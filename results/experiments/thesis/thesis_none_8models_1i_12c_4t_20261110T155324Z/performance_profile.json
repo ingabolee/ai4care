@@ -1,0 +1,114 @@
+{
+  "experiment_id": "thesis_none_8models_1i_12c_4t_20261110T155324Z",
+  "profile": "thesis",
+  "generation_wall_seconds": 19821.94,
+  "last_invocation_wall_seconds": 19821.94,
+  "episodes_generated_this_invocation": 96,
+  "successful_episode_traces": 96,
+  "model_load_ms": {
+    "deepseek-r1-distill-qwen-1.5b": 7246,
+    "qwen2.5-3b-instruct": 22757,
+    "qwen3-1.7b": 162970,
+    "llama-3.2-3b-instruct": 14086,
+    "phi-3.5-mini-instruct": 13378,
+    "llama-3.2-1b-instruct": 124211,
+    "phi-4-mini-instruct": 279588,
+    "qwen2.5-1.5b-instruct": 153748
+  },
+  "model_batch_workers": 4,
+  "episode_concurrency_per_model": 1,
+  "per_model": {
+    "deepseek-r1-distill-qwen-1.5b": {
+      "episodes": 12,
+      "episode_runtime_ms": 7965356,
+      "llm_calls": 112,
+      "llm_latency_ms": 7912979,
+      "extraction_latency_ms": 5645438,
+      "question_latency_ms": 2267541,
+      "retrieval_latency_ms": 50669,
+      "prompt_tokens": 37504,
+      "completion_tokens": 11859
+    },
+    "llama-3.2-1b-instruct": {
+      "episodes": 12,
+      "episode_runtime_ms": 4719248,
+      "llm_calls": 131,
+      "llm_latency_ms": 4686289,
+      "extraction_latency_ms": 2969022,
+      "question_latency_ms": 1717267,
+      "retrieval_latency_ms": 31890,
+      "prompt_tokens": 46461,
+      "completion_tokens": 10637
+    },
+    "llama-3.2-3b-instruct": {
+      "episodes": 12,
+      "episode_runtime_ms": 12076924,
+      "llm_calls": 110,
+      "llm_latency_ms": 12022627,
+      "extraction_latency_ms": 7935145,
+      "question_latency_ms": 4087482,
+      "retrieval_latency_ms": 51096,
+      "prompt_tokens": 44067,
+      "completion_tokens": 13994
+    },
+    "phi-3.5-mini-instruct": {
+      "episodes": 12,
+      "episode_runtime_ms": 14216550,
+      "llm_calls": 120,
+      "llm_latency_ms": 14170120,
+      "extraction_latency_ms": 9641055,
+      "question_latency_ms": 4529065,
+      "retrieval_latency_ms": 44182,
+      "prompt_tokens": 52078,
+      "completion_tokens": 22806
+    },
+    "phi-4-mini-instruct": {
+      "episodes": 12,
+      "episode_runtime_ms": 10629075,
+      "llm_calls": 88,
+      "llm_latency_ms": 10597002,
+      "extraction_latency_ms": 7260525,
+      "question_latency_ms": 3336477,
+      "retrieval_latency_ms": 30343,
+      "prompt_tokens": 36537,
+      "completion_tokens": 13622
+    },
+    "qwen2.5-1.5b-instruct": {
+      "episodes": 12,
+      "episode_runtime_ms": 8099427,
+      "llm_calls": 123,
+      "llm_latency_ms": 8073060,
+      "extraction_latency_ms": 6465037,
+      "question_latency_ms": 1608023,
+      "retrieval_latency_ms": 23042,
+      "prompt_tokens": 41449,
+      "completion_tokens": 24106
+    },
+    "qwen2.5-3b-instruct": {
+      "episodes": 12,
+      "episode_runtime_ms": 8072874,
+      "llm_calls": 86,
+      "llm_latency_ms": 8019851,
+      "extraction_latency_ms": 4269834,
+      "question_latency_ms": 3750017,
+      "retrieval_latency_ms": 50752,
+      "prompt_tokens": 37254,
+      "completion_tokens": 8856
+    },
+    "qwen3-1.7b": {
+      "episodes": 12,
+      "episode_runtime_ms": 3421112,
+      "llm_calls": 114,
+      "llm_latency_ms": 3370914,
+      "extraction_latency_ms": 2238654,
+      "question_latency_ms": 1132260,
+      "retrieval_latency_ms": 48806,
+      "prompt_tokens": 21878,
+      "completion_tokens": 4124
+    }
+  },
+  "notes": [
+    "Episode latency excludes model initialization; initialization time is reported separately.",
+    "Judge inference runs as a separate resumable stage using judge_benchmark.py."
+  ]
+}

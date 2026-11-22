@@ -297,6 +297,7 @@ class InterviewSession:
         
         self.turn_count = 0
         self.is_done = False
+        self.termination_reason: Optional[str] = None
 
         # Knowledge state machine
         self.knowledge_state: dict[str, dict] = _empty_knowledge_state()
@@ -384,8 +385,10 @@ class InterviewSession:
                 r["retrieved_context_supports_target"] = False # Default placeholder to be updated later by tests/logic
         record["retrieval_latency_ms"] = retrieval_latency_ms
 
-        if self.turn_count >= self.max_turns or self.completeness >= COMPLETION_THRESHOLD:
-            return self._complete()
+        if self.completeness >= COMPLETION_THRESHOLD:
+            return self._complete("schema_threshold")
+        if self.turn_count >= self.max_turns:
+            return self._complete("reply_limit")
 
         # Generate next question
         t_gen = time.perf_counter()
@@ -692,8 +695,9 @@ class InterviewSession:
             lines.append(f"{role}: {t['text'][:300]}")
         return "\n".join(lines)
 
-    def _complete(self) -> dict:
+    def _complete(self, reason: str) -> dict:
         self.is_done = True
+        self.termination_reason = reason
 
         if self.persist_runtime:
             try:
@@ -735,6 +739,7 @@ class InterviewSession:
         completion_msg = (
             f"Interview complete ({self.turn_count} turns). "
             f"Completeness: {self.completeness:.0%}. "
+            f"End reason: {self.termination_reason}. "
             f"Artifact: {self.artifact_id}"
         )
         self.turns.append({"role": "system", "text": completion_msg, "turn_id": self.turn_count})
@@ -749,6 +754,7 @@ class InterviewSession:
             "turns": self.turns,
             "turn_count": self.turn_count,
             "max_turns": self.max_turns,
+            "termination_reason": self.termination_reason,
             "is_done": self.is_done,
             "knowledge_state": self.knowledge_state,
             "completeness": self.completeness,

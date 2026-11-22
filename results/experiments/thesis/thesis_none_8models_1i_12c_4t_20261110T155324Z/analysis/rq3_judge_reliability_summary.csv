@@ -1,0 +1,6 @@
+Measure,Estimate,Indicative guide,Interpretation
+Krippendorff alpha (ordinal),0.09484795764744625,Below the conventional 0.667 guide,Overall ordinal agreement across four judges
+Fleiss kappa (nominal),-0.039182900541912646,Below 0.41 in the Landis–Koch bands,Overall nominal agreement; ignores score order
+"ICC(A,1), two-way mixed, absolute agreement",0.2493540807879797,Poor band in one published guide,Single-rating sensitivity analysis; assumes approximate intervals
+Kendall W (tie-corrected),0.5846472377681423,No universal cutoff; 1 means identical rankings,"Relative rank agreement, not score agreement"
+All-four unanimity,0.0,Descriptive percentage; no universal cutoff,Share of traces with one identical score from all four judges

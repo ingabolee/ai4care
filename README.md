@@ -188,7 +188,7 @@ python evaluate.py --profile pilot --models all
 python evaluate.py --profile full --models all
 ```
 
-Each invocation creates a timestamped folder under `results/experiments/<profile>/`. Run IDs encode profile, ablation, model count, iterations, cases, maximum replies, and UTC timestamp (for example, `thesis_none_8models_1i_12c_4t_<timestamp>`). The manifest records the estimator-selected model IDs and hardware estimates. `pilot` is a pipeline check; `thesis` is the compact balanced main study (12 variants, four from each of the three source groups); `full` evaluates every checked-in variant (currently 57) and takes longer. The benchmark still represents only three source documents, so variants do not provide additional independent source cases and conclusions must remain limited to this proof of concept. Turn progress, completed episodes, elapsed time, rolling ETA, and checkpoints are printed during the run.
+Each invocation creates a timestamped folder under `results/experiments/<profile>/`. Run IDs encode profile, ablation, model count, iterations, cases, maximum replies, and UTC timestamp (for example, `thesis_none_8models_1i_12c_10t_<timestamp>`). The manifest records the estimator-selected model IDs and hardware estimates. `--max-turns` defaults to 10 replies, while interviews can stop earlier at 75% schema completeness; the supported hard maximum is 15. `pilot` is a pipeline check; `thesis` is the compact balanced main study (12 variants, four from each of the three source groups); `full` evaluates every checked-in variant (currently 57) and takes longer. The benchmark still represents only three source documents, so variants do not provide additional independent source cases and conclusions must remain limited to this proof of concept. Turn progress, completed episodes, elapsed time, rolling ETA, and checkpoints are printed during the run.
 
 By default, `--models all` calls the hardware estimator at Q4_K_M and 2,048-token context, filters to models that fit, prefers distinct model families, and records the exact panel in `run_manifest.json`. Keep this estimator choice for the thesis comparison; explicit model lists are for separately documented exploratory runs.
 
@@ -214,6 +214,14 @@ python evaluate.py --profile custom --models general_main --ablation state_machi
 
 ### Automated judge benchmarking
 
+For a single Slurm submission that runs the exhaustive `full` profile, checks that every expected interview succeeded, scores every successful trace with the selected four-judge panel, and then creates the analysis, submit from the project root on the cluster:
+
+```bash
+sbatch run_ai4care_full.sbatch
+```
+
+The job uses all eligible frozen benchmark variants (`--profile full`), allows up to 10 participant replies per interview, and sets `--sample-per-model-source 0` so judges score every successful trace. Interviews still stop early when they reach the 75% schema-completion threshold. The script checks interview and judge coverage before proceeding to the next stage. Near the 12-hour allocation limit, it submits a continuation that resumes the same run from its saved checkpoints. Results are saved in `results/experiments/full/full_none_estimator_8models_1i_allcases_10t_<job-id>/`. Each Slurm allocation requests a GPU, 16 CPUs, and 56 GB RAM; the benchmark JSONL files must already be present on the cluster.
+
 ```bash
 # Step 1: run the thesis profile and note its printed folder
 python evaluate.py --profile thesis --models all
@@ -225,11 +233,11 @@ python judge_benchmark.py --experiment-dir "results/experiments/thesis/<run-id>"
 python analyze_experiment.py --experiment-dir "results/experiments/thesis/<run-id>"
 ```
 
-The default judge panel is selected with `estimator.py`: three fitting models up to 4B and one fitting model at least 7B, if available on the detected hardware. Exact choices are saved in the summary. Every judge sees the same deterministic sample of one trace per interviewer-model/source-group stratum. For eight interviewers and three source groups, this is up to 24 traces and 96 judge scores. Set `--sample-per-model-source 0` to score every successful trace. The runner loads one local judge at a time, resumes completed judge/trace pairs, saves each completed score, and prints progress and ETA.
+The default judge panel is selected with `estimator.py`: three fitting models up to 4B and one fitting model at least 7B, if available on the detected hardware. Exact choices are saved in the summary. Every judge sees the same deterministic sample of one trace per interviewer-model/source-group stratum. For eight interviewers and three source groups, this is up to 24 traces and 96 judge scores. Set `--sample-per-model-source 0` to score every successful trace. Judge response schema v3 requests only the ordinal integer, removing the generated evidence string; malformed outputs get one retry and a truncated JSON response can still be scored when its numeric field is present. The runner loads one local judge at a time, resumes completed judge/trace pairs, retries failed pairs in exhaustive mode, saves each completed score, and prints progress and ETA.
 
 Judge artifacts are written under `<experiment>/judges/`: `judge_scores_long.csv` has one row per trace and judge, `panel_aggregated.csv` has panel medians and disagreement MAD, and `judge_benchmark_summary.json` records the estimator panel, sample, load time, latency, and parse success. Downloaded GGUF files are reused from `.models/`.
 
-The analysis stage writes `analysis_report.md`, `analysis_summary.json`, and CSV tables for RQ1 bootstrap estimates and paired differences, RQ2 efficiency metrics, and RQ3 judge reliability. The thesis's reliability criterion is **Spearman ρ > 0.7 for at least two judge pairs**; ρ is not a p-value. The notebook at `notebooks/thesis_results_analysis.ipynb` explains metrics, decision rules, limitations, and visualizations. Its default is the newest `thesis` run and it never merges unrelated run IDs. Reference-fact F1 is scored against only full-source sentences actually disclosed by the synthetic respondent, so undisclosed sentences are not counted as extraction misses.
+The analysis stage writes `analysis_report.md`, `analysis_summary.json`, and CSV tables for RQ1 model estimates and paired differences, RQ2 efficiency metrics, and RQ3 descriptive judge-assessed question quality. For this completed run, RQ3 was transparently amended after data collection: scores of 3–4 are reported as good/excellent question-quality ratings, not as judge reliability. The original reliability objective is not answered by this measure. The notebook at `notebooks/thesis_results_analysis.ipynb` explains the amended scope, metrics, limitations, and visualizations. It defaults to the explicitly selected thesis run and never merges unrelated run IDs. Reference-fact F1 is scored against only full-source sentences actually disclosed by the synthetic respondent, so undisclosed sentences are not counted as extraction misses.
 
 ---
 
@@ -340,4 +348,4 @@ The interviewer targets nine structured fields per episode:
 | `operational_impact` | Outcomes and consequences of the actions taken |
 | `lessons_learned` | Takeaways and recommendations for the future |
 
-Each field transitions through states: `unknown → candidate → supported → verified` (or `conflicting`). An episode terminates when 75% of the maximum weighted score is reached or after 15 turns.
+Each field transitions through states: `unknown → candidate → supported → verified` (or `conflicting`). An episode terminates when 75% of the maximum weighted score is reached or at the configured reply limit (10 by default, with a hard maximum of 15).

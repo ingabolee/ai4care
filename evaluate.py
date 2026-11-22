@@ -81,7 +81,7 @@ class ExperimentConfig:
     max_tokens: int = 200              # Passed to extraction (400) and question gen (200)
     n_ctx: int = 2048                  # Used by LlamaCppRunner at init
     top_k: int = 5                     # RAG_TOP_K used by engine.py
-    max_turns: int = 4                 # participant responses per episode in the thesis profile
+    max_turns: int = 10                # participant responses per episode by default
     completion_threshold: float = 0.75 # COMPLETION_THRESHOLD used by engine.py
     iterations: int = 1
     cases_per_iteration: int = 50
@@ -716,7 +716,8 @@ CSV_COLS = [
     "effective_extraction_temperature", "effective_question_temperature",
     "effective_seed",
     # Runtime
-    "turn_count", "total_runtime_ms", "llm_calls", "prompt_tokens", "completion_tokens",
+    "turn_count", "turns_to_completion", "termination_reason",
+    "total_runtime_ms", "llm_calls", "prompt_tokens", "completion_tokens",
     # Primary outcome
     "reference_fact_f1", "reference_fact_precision", "reference_fact_recall",
     "matching_algorithm", "matching_threshold",
@@ -754,8 +755,8 @@ def main():
     parser.add_argument("--iterations", type=int, default=None)
     parser.add_argument("--cases", type=int, default=None,
                         help="Cases per iteration; thesis defaults to 12 balanced cases (4 per source group)")
-    parser.add_argument("--max-turns", type=int, default=4,
-                        help="Maximum participant replies per interview (default: 4; hard maximum: 15).")
+    parser.add_argument("--max-turns", type=int, default=10,
+                        help="Maximum participant replies per interview (default: 10; hard maximum: 15).")
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--ablation", choices=["none", "no_rag", "state_machine"], default="none")
     parser.add_argument("--workers", type=int, default=0,
@@ -1182,6 +1183,11 @@ def main():
             "effective_seed": trace_rec.get("effective_seed", ""),
             # Runtime
             "turn_count": trace.get("turn_count", 0),
+            "turns_to_completion": (
+                trace.get("turn_count")
+                if trace.get("termination_reason") == "schema_threshold" else None
+            ),
+            "termination_reason": trace.get("termination_reason", ""),
             "total_runtime_ms": trace_rec.get("total_runtime_ms", 0),
             "llm_calls": sum(
                 (turn.get("extraction_llm_calls", 0) if turn.get("role") == "participant" else 0) +
